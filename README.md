@@ -1,0 +1,125 @@
+# Bot de Mensagens e IA da Rocketseat
+
+Este projeto contém o código do bot do Discord que serve como um agente de IA e também expõe uma API para agendamento e envio de mensagens.
+
+## Configuração do Ambiente
+
+1.  **Clone o repositório:**
+    ```bash
+    git clone <url-do-repositorio>
+    cd rocketseat-bot
+    ```
+
+2.  **Instale as dependências:**
+    ```bash
+    npm install
+    ```
+
+3.  **Configure as variáveis de ambiente:**
+    Copie o arquivo `.env.example` para um novo arquivo chamado `.env` e preencha todas as variáveis necessárias, incluindo o `DATABASE_URL` do Supabase e o `DISCORD_BOT_TOKEN`.
+
+4.  **Execute as migrações do banco de dados:**
+    ```bash
+    npx prisma migrate dev
+    ```
+
+5.  **Inicie o bot em modo de desenvolvimento:**
+    ```bash
+    npm run dev
+    ```
+
+---
+
+## Referência da API
+
+A URL base para a API é `http://localhost:3000` (ou a URL de produção).
+
+### Autenticação
+
+Todas as requisições para a API devem incluir um cabeçalho de autorização com a chave da API interna.
+
+-   **Header**: `Authorization`
+-   **Valor**: `ApiKey SUA_CHAVE_SECRETA_AQUI`
+
+### Endpoints
+
+#### Recurso: Mensagens Agendadas
+
+**1. Listar mensagens agendadas**
+
+Retorna uma lista de todas as mensagens agendadas, com um filtro opcional por status.
+
+-   **Endpoint**: `GET /api/v1/messages/scheduled`
+-   **Query Params (opcional)**:
+    -   `status`: Filtra por um status específico. Valores possíveis: `PENDING`, `SENT`, `ERROR_SENDING`, `ERROR_CHANNEL_NOT_FOUND`.
+-   **Exemplo de Resposta (200 OK)**:
+    ```json
+    [
+        {
+            "id": 1,
+            "createdAt": "2025-07-30T20:15:00.000Z",
+            "channelId": "123456789012345678",
+            "messageContent": "Lembrete da nossa daily amanhã às 09:00! 🚀",
+            "scheduleTime": "2025-07-31T12:00:00.000Z",
+            "status": "PENDING"
+        }
+    ]
+    ```
+
+**2. Criar (agendar) uma nova mensagem**
+
+Agenda uma nova mensagem para ser enviada em uma data futura.
+
+-   **Endpoint**: `POST /api/v1/messages/scheduled`
+-   **Corpo da Requisição (JSON)**:
+    ```json
+    {
+        "channelId": "123456789012345678",
+        "messageContent": "Não se esqueçam de preencher o forms de feedback da semana!",
+        "scheduleTime": "2025-08-01T21:00:00.000Z"
+    }
+    ```
+-   **Exemplo de Resposta (201 Created)**: Retorna o objeto da mensagem criada.
+
+**3. Atualizar uma mensagem agendada**
+
+Altera os detalhes de uma mensagem que ainda está pendente.
+
+-   **Endpoint**: `PUT /api/v1/messages/scheduled/:id`
+-   **Corpo da Requisição (JSON, envie apenas os campos a serem alterados)**:
+    ```json
+    {
+        "messageContent": "Lembrete da nossa daily amanhã às 09:30! (Horário atualizado)",
+        "scheduleTime": "2025-07-31T12:30:00.000Z"
+    }
+    ```
+-   **Exemplo de Resposta (200 OK)**: Retorna o objeto completo da mensagem atualizada.
+
+**4. Deletar uma mensagem agendada**
+
+Remove uma mensagem agendada (se ela ainda estiver pendente).
+
+-   **Endpoint**: `DELETE /api/v1/messages/scheduled/:id`
+-   **Exemplo de Resposta (204 No Content)**: Resposta vazia, indicando sucesso.
+
+#### Recurso: Ações Imediatas
+
+**1. Enviar uma mensagem imediatamente**
+
+Envia uma mensagem para um canal sem agendamento.
+
+-   **Endpoint**: `POST /api/v1/messages/send-now`
+-   **Corpo da Requisição (JSON)**:
+    ```json
+    {
+        "channelId": "123456789012345678",
+        "messageContent": "Aviso importante: A plataforma ficará instável nos próximos 15 minutos para uma atualização."
+    }
+    ```
+-   **Exemplo de Resposta (200 OK)**:
+    ```json
+    {
+        "success": true,
+        "message": "Mensagem enviada com sucesso."
+    }
+    ```

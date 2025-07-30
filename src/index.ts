@@ -5,7 +5,7 @@ import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import 'dotenv/config';
 
 import { apiKeyAuth } from './api/middlewares/apiKeyAuth';
-import messageRoutes from './api/routes/messages';
+import messageRoutes from './api/routes/messages.route'; // <-- NOME DO ARQUIVO ATUALIZADO AQUI
 import { initializeScheduler } from './scheduler/messageScheduler';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
@@ -19,11 +19,11 @@ const client = new Client({
 
 // Carregando os eventos do bot
 const eventsPath = path.join(__dirname, 'bot', 'events');
-const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.ts'));
+const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.ts') || file.endsWith('.js'));
 
 for (const file of eventFiles) {
   const filePath = path.join(eventsPath, file);
-  const event = require(filePath).default; // Usamos .default por causa do export default
+  const event = require(filePath).default;
   if (event.once) {
     client.once(event.name, (...args: any[]) => event.execute(...args));
   } else {
@@ -42,7 +42,9 @@ app.get('/status', (req, res) => {
   res.status(200).json({ status: 'API está online' });
 });
 
+// A rota base para todas as operações de mensagem agora é /api/v1/messages
 app.use('/api/v1/messages', apiKeyAuth, messageRoutes);
+
 
 // --- INICIALIZAÇÃO GERAL ---
 client.login(process.env.DISCORD_BOT_TOKEN)
