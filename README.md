@@ -43,6 +43,45 @@ Todas as requisições para a API devem incluir um cabeçalho de autorização c
 
 ### Endpoints
 
+#### Recurso: Servidores (Guilds)
+
+**1. Listar servidores e canais disponíveis**
+
+Retorna uma lista de todos os servidores em que o bot está, junto com uma lista de seus canais de texto e de anúncio.
+
+-   **Endpoint**: `GET /api/v1/guilds`
+-   **Exemplo de Resposta (200 OK)**:
+    ```json
+    [
+        {
+            "id": "111111111111111111",
+            "name": "Servidor da Rocketseat",
+            "iconURL": "[https://cdn.discordapp.com/icons/](https://cdn.discordapp.com/icons/)...",
+            "channels": [
+                {
+                    "id": "222222222222222222",
+                    "name": "anuncios-gerais"
+                },
+                {
+                    "id": "333333333333333333",
+                    "name": "bate-papo"
+                }
+            ]
+        },
+        {
+            "id": "444444444444444444",
+            "name": "Outro Servidor",
+            "iconURL": null,
+            "channels": [
+                {
+                    "id": "555555555555555555",
+                    "name": "geral"
+                }
+            ]
+        }
+    ]
+    ```
+
 #### Recurso: Mensagens Agendadas
 
 **1. Listar mensagens agendadas**

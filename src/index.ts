@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
+import cors from 'cors';
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import 'dotenv/config';
 
 import { apiKeyAuth } from './api/middlewares/apiKeyAuth';
-import messageRoutes from './api/routes/messages.route'; // <-- NOME DO ARQUIVO ATUALIZADO AQUI
+import messageRoutes from './api/routes/messages.route';
+import guildsRoutes from './api/routes/guilds.routes'; // <-- 1. IMPORTE A NOVA ROTA
 import { initializeScheduler } from './scheduler/messageScheduler';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
@@ -36,15 +38,19 @@ const app = express();
 const PORT = process.env.API_PORT || 3000;
 
 app.set('discordClient', client);
-app.use(express.json());
 
+// --- CONFIGURAÇÕES DO MIDDLEWARE ---
+app.use(express.json());
+app.use(cors());
+
+// --- ROTAS DA API ---
 app.get('/status', (req, res) => {
   res.status(200).json({ status: 'API está online' });
 });
 
-// A rota base para todas as operações de mensagem agora é /api/v1/messages
+// Registra as rotas de mensagens e de guilds, ambas protegidas pela chave de API
 app.use('/api/v1/messages', apiKeyAuth, messageRoutes);
-
+app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes); // <-- 2. REGISTRE A NOVA ROTA AQUI
 
 // --- INICIALIZAÇÃO GERAL ---
 client.login(process.env.DISCORD_BOT_TOKEN)
