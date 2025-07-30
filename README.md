@@ -61,21 +61,6 @@ Retorna uma lista de todos os servidores em que o bot está, junto com uma lista
                 {
                     "id": "222222222222222222",
                     "name": "anuncios-gerais"
-                },
-                {
-                    "id": "333333333333333333",
-                    "name": "bate-papo"
-                }
-            ]
-        },
-        {
-            "id": "444444444444444444",
-            "name": "Outro Servidor",
-            "iconURL": null,
-            "channels": [
-                {
-                    "id": "555555555555555555",
-                    "name": "geral"
                 }
             ]
         }
@@ -86,23 +71,33 @@ Retorna uma lista de todos os servidores em que o bot está, junto com uma lista
 
 **1. Listar mensagens agendadas**
 
-Retorna uma lista de todas as mensagens agendadas, com um filtro opcional por status.
+Retorna uma lista paginada de mensagens, com suporte a filtros avançados.
 
 -   **Endpoint**: `GET /api/v1/messages/scheduled`
 -   **Query Params (opcional)**:
-    -   `status`: Filtra por um status específico. Valores possíveis: `PENDING`, `SENT`, `ERROR_SENDING`, `ERROR_CHANNEL_NOT_FOUND`.
+    -   `page`: Número da página (padrão: `1`).
+    -   `limit`: Itens por página (padrão: `20`).
+    -   `status`: Filtra por status (`PENDING`, `SENT`, `ERROR_SENDING`, `ERROR_CHANNEL_NOT_FOUND`).
+    -   `guildId`: Filtra por ID do servidor.
+    -   `startDate`: Filtra mensagens agendadas a partir desta data (formato ISO 8601).
+    -   `endDate`: Filtra mensagens agendadas até esta data (formato ISO 8601).
 -   **Exemplo de Resposta (200 OK)**:
     ```json
-    [
-        {
-            "id": 1,
-            "createdAt": "2025-07-30T20:15:00.000Z",
-            "channelId": "123456789012345678",
-            "messageContent": "Lembrete da nossa daily amanhã às 09:00! 🚀",
-            "scheduleTime": "2025-07-31T12:00:00.000Z",
-            "status": "PENDING"
-        }
-    ]
+    {
+        "messages": [
+            {
+                "id": "1",
+                "createdAt": "2025-07-30T20:15:00.000Z",
+                "guildId": "111111111111111111",
+                "channelId": "222222222222222222",
+                "messageContent": "Lembrete da nossa daily amanhã às 09:00! 🚀",
+                "scheduleTime": "2025-07-31T12:00:00.000Z",
+                "status": "PENDING",
+                "guildName": "Servidor da Rocketseat"
+            }
+        ],
+        "total": 150
+    }
     ```
 
 **2. Criar (agendar) uma nova mensagem**
@@ -113,7 +108,7 @@ Agenda uma nova mensagem para ser enviada em uma data futura.
 -   **Corpo da Requisição (JSON)**:
     ```json
     {
-        "channelId": "123456789012345678",
+        "channelId": "222222222222222222",
         "messageContent": "Não se esqueçam de preencher o forms de feedback da semana!",
         "scheduleTime": "2025-08-01T21:00:00.000Z"
     }
@@ -128,7 +123,7 @@ Altera os detalhes de uma mensagem que ainda está pendente.
 -   **Corpo da Requisição (JSON, envie apenas os campos a serem alterados)**:
     ```json
     {
-        "messageContent": "Lembrete da nossa daily amanhã às 09:30! (Horário atualizado)",
+        "messageContent": "Lembrete da nossa daily amanhã às 09:30!",
         "scheduleTime": "2025-07-31T12:30:00.000Z"
     }
     ```
@@ -136,7 +131,7 @@ Altera os detalhes de uma mensagem que ainda está pendente.
 
 **4. Deletar uma mensagem agendada**
 
-Remove uma mensagem agendada (se ela ainda estiver pendente).
+Remove uma mensagem agendada.
 
 -   **Endpoint**: `DELETE /api/v1/messages/scheduled/:id`
 -   **Exemplo de Resposta (204 No Content)**: Resposta vazia, indicando sucesso.
@@ -151,8 +146,8 @@ Envia uma mensagem para um canal sem agendamento.
 -   **Corpo da Requisição (JSON)**:
     ```json
     {
-        "channelId": "123456789012345678",
-        "messageContent": "Aviso importante: A plataforma ficará instável nos próximos 15 minutos para uma atualização."
+        "channelId": "222222222222222222",
+        "messageContent": "Aviso importante: A plataforma ficará instável nos próximos 15 minutos."
     }
     ```
 -   **Exemplo de Resposta (200 OK)**:
