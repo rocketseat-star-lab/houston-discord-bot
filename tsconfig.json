@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", // A versão do JavaScript que será gerada
+    "module": "commonjs", // O sistema de módulos
+    "outDir": "./dist", // Onde o código compilado será salvo
+    "rootDir": "./src", // Onde está nosso código fonte
+    "strict": true, // Habilita todas as checagens estritas de tipo
+    "esModuleInterop": true, // Permite compatibilidade com módulos CommonJS
+    "skipLibCheck": true, // Pula a verificação de tipos em arquivos de declaração
+    "forceConsistentCasingInFileNames": true, // Garante que os nomes de arquivos sejam consistentes
+    "resolveJsonModule": true // Permite importar arquivos .json
+  },
+  "include": ["src/**/*"], // Quais arquivos o TypeScript deve compilar
+  "exclude": ["node_modules", ".vscode"] // Quais arquivos devem ser ignorados
+}
