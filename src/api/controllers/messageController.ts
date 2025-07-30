@@ -25,7 +25,8 @@ interface SendNowBody {
 }
 
 interface EditSentMessageBody {
-    messageContent: string;
+    messageContent?: string;
+    title?: string;
 }
 
 // --- CRUD para Mensagens Agendadas ---
@@ -102,14 +103,40 @@ export async function listScheduledMessages(req: Request, res: Response) {
 export async function updateScheduledMessage(req: Request<{ id: string }, {}, UpdateScheduleBody>, res: Response) {
     const messageId = parseInt(req.params.id, 10);
     if (isNaN(messageId)) return res.status(400).json({ error: 'ID da mensagem inválido.' });
-    if (req.body.title && req.body.title.length > 30) return res.status(400).json({ error: 'O título não pode exceder 30 caracteres.' });
+
+    const { channelId, messageContent, scheduleTime, title } = req.body;
+
+    // --- LÓGICA ATUALIZADA AQUI ---
+    const dataToUpdate: Prisma.ScheduledMessageUpdateInput = {};
+
+    if (title !== undefined) {
+        if (title.length > 30) return res.status(400).json({ error: 'O título não pode exceder 30 caracteres.' });
+        dataToUpdate.title = title;
+    }
+    if (channelId) dataToUpdate.channelId = channelId;
+    if (messageContent) dataToUpdate.messageContent = messageContent;
+    if (scheduleTime) {
+        const newScheduleDate = new Date(scheduleTime);
+        if (isNaN(newScheduleDate.getTime()) || newScheduleDate < new Date()) {
+            return res.status(400).json({ error: 'A nova data de agendamento é inválida ou está no passado.' });
+        }
+        dataToUpdate.scheduleTime = newScheduleDate;
+    }
+    // --- FIM DA ATUALIZAÇÃO ---
+
+    if (Object.keys(dataToUpdate).length === 0) {
+        return res.status(400).json({ error: 'Nenhum dado fornecido para atualização.' });
+    }
 
     try {
-        const updatedMessage = await prisma.scheduledMessage.update({ where: { id: messageId }, data: req.body });
+        const updatedMessage = await prisma.scheduledMessage.update({
+            where: { id: messageId, status: 'PENDING' }, // Garante que só podemos editar mensagens pendentes
+            data: dataToUpdate
+        });
         res.status(200).json(updatedMessage);
     } catch (error) {
         // @ts-ignore
-        if (error.code === 'P2025') return res.status(404).json({ error: 'Mensagem agendada não encontrada.' });
+        if (error.code === 'P2025') return res.status(404).json({ error: 'Mensagem pendente não encontrada para edição.' });
         console.error('Erro ao atualizar agendamento:', error);
         res.status(500).json({ error: 'Erro interno do servidor.' });
     }
@@ -129,6 +156,7 @@ export async function deleteScheduledMessage(req: Request<{ id: string }>, res: 
         res.status(500).json({ error: 'Erro interno do servidor.' });
     }
 }
+
 
 // --- Ações Imediatas e Pós-Envio ---
 
@@ -167,23 +195,38 @@ export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, re
 
 export async function editSentMessage(req: Request<{ id: string }, {}, EditSentMessageBody>, res: Response) {
     const messageId = parseInt(req.params.id, 10);
-    const { messageContent } = req.body;
+    if (isNaN(messageId)) return res.status(400).json({ error: 'ID da mensagem inválido.' });
+    
+    const { messageContent, title } = req.body;
     const discordClient = req.app.get('discordClient') as Client;
 
-    if (isNaN(messageId)) return res.status(400).json({ error: 'ID da mensagem inválido.' });
+    // --- LÓGICA ATUALIZADA AQUI ---
+    const dataToUpdate: Prisma.ScheduledMessageUpdateInput = {};
+    if (title !== undefined) {
+        if (title.length > 30) return res.status(400).json({ error: 'O título não pode exceder 30 caracteres.' });
+        dataToUpdate.title = title;
+    }
+    if (messageContent) dataToUpdate.messageContent = messageContent;
+
+    if (Object.keys(dataToUpdate).length === 0) {
+        return res.status(400).json({ error: 'Nenhum dado fornecido para atualização (title ou messageContent).' });
+    }
+    // --- FIM DA ATUALIZAÇÃO ---
 
     try {
         const record = await prisma.scheduledMessage.findUnique({ where: { id: messageId } });
         if (!record) return res.status(404).json({ error: 'Registro da mensagem não encontrado.' });
-        if (!record.messageUrl) return res.status(400).json({ error: 'A mensagem ainda não foi enviada ou não tem URL.' });
-
-        const channel = await discordClient.channels.fetch(record.channelId);
-        if (!(channel instanceof TextChannel)) return res.status(404).json({ error: 'Canal da mensagem não encontrado.' });
+        if (record.status === 'PENDING') return res.status(400).json({ error: 'Esta mensagem ainda está pendente. Use o endpoint de agendamento para editá-la.' });
         
-        const discordMessage = await channel.messages.fetch(record.messageUrl.split('/').pop()!);
-        await discordMessage.edit(messageContent);
+        // Se houver novo conteúdo, edita a mensagem no Discord
+        if (messageContent && record.messageUrl) {
+            const channel = await discordClient.channels.fetch(record.channelId);
+            if (!(channel instanceof TextChannel)) return res.status(404).json({ error: 'Canal da mensagem não encontrado.' });
+            const discordMessage = await channel.messages.fetch(record.messageUrl.split('/').pop()!);
+            await discordMessage.edit(messageContent);
+        }
         
-        const updatedRecord = await prisma.scheduledMessage.update({ where: { id: messageId }, data: { messageContent }});
+        const updatedRecord = await prisma.scheduledMessage.update({ where: { id: messageId }, data: dataToUpdate});
         res.status(200).json(updatedRecord);
 
     } catch (error) {
@@ -202,9 +245,13 @@ export async function deleteSentMessage(req: Request<{ id: string }>, res: Respo
         if (!record) return res.status(404).json({ error: 'Registro da mensagem não encontrado.' });
 
         if (record.messageUrl) {
-            const channel = await discordClient.channels.fetch(record.channelId);
-            if (channel instanceof TextChannel) {
-                await channel.messages.delete(record.messageUrl.split('/').pop()!);
+            try {
+                const channel = await discordClient.channels.fetch(record.channelId);
+                if (channel instanceof TextChannel) {
+                    await channel.messages.delete(record.messageUrl.split('/').pop()!);
+                }
+            } catch (discordError) {
+                console.warn(`Não foi possível deletar a mensagem do Discord (ID: ${record.id}), talvez já tenha sido removida. Prosseguindo com a deleção do registro.`)
             }
         }
         
