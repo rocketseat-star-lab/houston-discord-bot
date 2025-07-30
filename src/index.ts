@@ -1,3 +1,11 @@
+// --- CORREÇÃO GLOBAL PARA SERIALIZAÇÃO DE BIGINT ---
+// O JSON.stringify não sabe como converter BigInt, então adicionamos um método .toJSON
+// ao protótipo do BigInt para que ele seja convertido para string antes da serialização.
+// Isso corrige o erro em toda a aplicação.
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
@@ -6,8 +14,8 @@ import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import 'dotenv/config';
 
 import { apiKeyAuth } from './api/middlewares/apiKeyAuth';
-import messageRoutes from './api/routes/messages.route';
-import guildsRoutes from './api/routes/guilds.routes'; // <-- 1. IMPORTE A NOVA ROTA
+import messageRoutes from './api/routes/messages.routes';
+import guildsRoutes from './api/routes/guilds.routes';
 import { initializeScheduler } from './scheduler/messageScheduler';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
@@ -50,7 +58,7 @@ app.get('/status', (req, res) => {
 
 // Registra as rotas de mensagens e de guilds, ambas protegidas pela chave de API
 app.use('/api/v1/messages', apiKeyAuth, messageRoutes);
-app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes); // <-- 2. REGISTRE A NOVA ROTA AQUI
+app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes);
 
 // --- INICIALIZAÇÃO GERAL ---
 client.login(process.env.DISCORD_BOT_TOKEN)
