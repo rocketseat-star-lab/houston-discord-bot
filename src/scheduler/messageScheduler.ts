@@ -4,7 +4,8 @@ import { Client, TextChannel } from 'discord.js';
 import { MessageStatus } from '@prisma/client';
 
 export function initializeScheduler(discordClient: Client) {
-  cron.schedule('* * * * *', async () => {
+  // Alterado para rodar uma vez por hora, no minuto 0.
+  cron.schedule('0 * * * *', async () => {
     console.log('Verificando por mensagens agendadas...');
 
     const messagesToSend = await prisma.scheduledMessage.findMany({
@@ -29,8 +30,8 @@ export function initializeScheduler(discordClient: Client) {
         const channel = await discordClient.channels.fetch(msg.channelId);
         
         if (channel instanceof TextChannel) {
-          const sentMessage = await channel.send(msg.messageContent); // Captura a mensagem enviada
-          messageUrl = sentMessage.url; // Extrai a URL
+          const sentMessage = await channel.send(msg.messageContent);
+          messageUrl = sentMessage.url;
           console.log(`Mensagem ${msg.id} enviada para o canal ${msg.channelId}.`);
         } else {
           status = 'ERROR_CHANNEL_NOT_FOUND';
@@ -42,11 +43,11 @@ export function initializeScheduler(discordClient: Client) {
       } finally {
         await prisma.scheduledMessage.update({
           where: { id: msg.id },
-          data: { status, messageUrl }, // Salva o status e a URL
+          data: { status, messageUrl },
         });
       }
     }
   });
 
-  console.log('Agendador de mensagens inicializado. Verificando a cada minuto.');
+  console.log('Agendador de mensagens inicializado. Verificando a cada hora.');
 }
