@@ -1,7 +1,4 @@
 // --- CORREÇÃO GLOBAL PARA SERIALIZAÇÃO DE BIGINT ---
-// O JSON.stringify não sabe como converter BigInt, então adicionamos um método .toJSON
-// ao protótipo do BigInt para que ele seja convertido para string antes da serialização.
-// Isso corrige o erro em toda a aplicação.
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
 };
@@ -9,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
-import cors from 'cors';
+import cors from 'cors'; // <-- 1. IMPORTE O PACOTE
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import 'dotenv/config';
 
@@ -49,7 +46,13 @@ app.set('discordClient', client);
 
 // --- CONFIGURAÇÕES DO MIDDLEWARE ---
 app.use(express.json());
-app.use(cors());
+
+// <-- 2. CONFIGURE O CORS PARA ACEITAR A ORIGEM DO FRONT-END
+const corsOptions = {
+  origin: 'https://rocketseat-tools.vercel.app' 
+};
+app.use(cors(corsOptions));
+// <-- FIM DA CONFIGURAÇÃO
 
 // --- ROTAS DA API ---
 app.get('/status', (req, res) => {
