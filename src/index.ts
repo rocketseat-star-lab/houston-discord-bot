@@ -13,7 +13,6 @@ import 'dotenv/config';
 import { apiKeyAuth } from './api/middlewares/apiKeyAuth';
 import messageRoutes from './api/routes/messages.routes';
 import guildsRoutes from './api/routes/guilds.routes';
-import { initializeScheduler } from './scheduler/messageScheduler';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
 const client = new Client({
@@ -47,22 +46,28 @@ app.set('discordClient', client);
 // --- CONFIGURAÇÕES DO MIDDLEWARE ---
 app.use(express.json());
 
-// --- AJUSTE DE CORS PARA DESENVOLVIMENTO ---
-// Lista de origens permitidas
+// --- AJUSTE DE CORS COM REGEX PARA NGROK ---
 const allowedOrigins = [
     'https://rocketseat-tools.vercel.app', // Origem de produção
-    'http://localhost:3000',              // Origem de desenvolvimento local (ajuste a porta se necessário)
+    'http://localhost:3000',
     'http://localhost:8080'               // Origem de desenvolvimento local (ajuste a porta se necessário)
 ];
+const ngrokRegex = /^https:\/\/.*\.ngrok-free\.app$/;
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Permite requisições sem 'origin' (como Postman) ou se a origem estiver na lista
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Permite requisições sem 'origin' (como Postman) ou se a origem estiver na lista estática
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
-    } else {
-      callback(new Error('Não permitido por CORS'));
+      return;
     }
+    // Permite requisições que correspondam à regex do ngrok
+    if (ngrokRegex.test(origin)) {
+      callback(null, true);
+      return;
+    }
+    // Bloqueia todas as outras origens
+    callback(new Error('Não permitido por CORS'));
   }
 };
 app.use(cors(corsOptions));
