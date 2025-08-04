@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
-import cors from 'cors'; // <-- 1. IMPORTE O PACOTE
+import cors from 'cors';
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import 'dotenv/config';
 
@@ -47,19 +47,32 @@ app.set('discordClient', client);
 // --- CONFIGURAÇÕES DO MIDDLEWARE ---
 app.use(express.json());
 
-// <-- 2. CONFIGURE O CORS PARA ACEITAR A ORIGEM DO FRONT-END
+// --- AJUSTE DE CORS PARA DESENVOLVIMENTO ---
+// Lista de origens permitidas
+const allowedOrigins = [
+    'https://rocketseat-tools.vercel.app', // Origem de produção
+    'http://localhost:3000',              // Origem de desenvolvimento local (ajuste a porta se necessário)
+    'http://localhost:8080'               // Origem de desenvolvimento local (ajuste a porta se necessário)
+];
+
 const corsOptions = {
-  origin: 'https://rocketseat-tools.vercel.app' 
+  origin: function (origin, callback) {
+    // Permite requisições sem 'origin' (como Postman) ou se a origem estiver na lista
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Não permitido por CORS'));
+    }
+  }
 };
 app.use(cors(corsOptions));
-// <-- FIM DA CONFIGURAÇÃO
+// --- FIM DO AJUSTE ---
 
 // --- ROTAS DA API ---
 app.get('/status', (req, res) => {
   res.status(200).json({ status: 'API está online' });
 });
 
-// Registra as rotas de mensagens e de guilds, ambas protegidas pela chave de API
 app.use('/api/v1/messages', apiKeyAuth, messageRoutes);
 app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes);
 
