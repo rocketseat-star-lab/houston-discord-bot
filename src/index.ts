@@ -13,6 +13,7 @@ import 'dotenv/config';
 import { apiKeyAuth } from './api/middlewares/apiKeyAuth';
 import messageRoutes from './api/routes/messages.routes';
 import guildsRoutes from './api/routes/guilds.routes';
+import { initializeScheduler } from './scheduler/messageScheduler';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
 const client = new Client({
