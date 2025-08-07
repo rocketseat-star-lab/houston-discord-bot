@@ -4,8 +4,8 @@ import { Client, TextChannel } from 'discord.js';
 import { MessageStatus } from '@prisma/client';
 
 export function initializeScheduler(discordClient: Client) {
-  // Alterado para rodar uma vez por hora, no minuto 0.
-  cron.schedule('0 * * * *', async () => {
+  // Alterado para rodar a cada minuto.
+  cron.schedule('* * * * *', async () => {
     console.log('Verificando por mensagens agendadas...');
 
     const messagesToSend = await prisma.scheduledMessage.findMany({
@@ -49,5 +49,5 @@ export function initializeScheduler(discordClient: Client) {
     }
   });
 
-  console.log('Agendador de mensagens inicializado. Verificando a cada hora.');
+  console.log('Agendador de mensagens inicializado. Verificando a cada minuto.');
 }
