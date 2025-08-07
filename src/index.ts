@@ -13,6 +13,7 @@ import 'dotenv/config';
 import { apiKeyAuth } from './api/middlewares/apiKeyAuth';
 import messageRoutes from './api/routes/messages.routes';
 import guildsRoutes from './api/routes/guilds.routes';
+import webhooksRoutes from './api/routes/webhooks.routes'; // <-- 1. IMPORTE A NOVA ROTA
 import { initializeScheduler } from './scheduler/messageScheduler';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
@@ -47,40 +48,32 @@ app.set('discordClient', client);
 // --- CONFIGURAÇÕES DO MIDDLEWARE ---
 app.use(express.json());
 
-// --- AJUSTE DE CORS COM REGEX PARA NGROK ---
 const allowedOrigins = [
-    'https://rocketseat-tools.vercel.app', // Origem de produção
-    'http://localhost:3000',
-    'http://localhost:8080'               // Origem de desenvolvimento local (ajuste a porta se necessário)
+    'https://rocketseat-tools.vercel.app',
+    'http://localhost:5173'
 ];
 const ngrokRegex = /^https:\/\/.*\.ngrok-free\.app$/;
 
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    // Permite requisições sem 'origin' (como Postman) ou se a origem estiver na lista estática
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || ngrokRegex.test(origin)) {
       callback(null, true);
-      return;
+    } else {
+      callback(new Error('Não permitido por CORS'));
     }
-    // Permite requisições que correspondam à regex do ngrok
-    if (ngrokRegex.test(origin)) {
-      callback(null, true);
-      return;
-    }
-    // Bloqueia todas as outras origens
-    callback(new Error('Não permitido por CORS'));
   }
 };
 app.use(cors(corsOptions));
-// --- FIM DO AJUSTE ---
 
 // --- ROTAS DA API ---
 app.get('/status', (req, res) => {
   res.status(200).json({ status: 'API está online' });
 });
 
+// Registra as rotas, todas protegidas pela chave de API
 app.use('/api/v1/messages', apiKeyAuth, messageRoutes);
 app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes);
+app.use('/api/v1/webhooks', apiKeyAuth, webhooksRoutes); // <-- 2. REGISTRE A NOVA ROTA
 
 // --- INICIALIZAÇÃO GERAL ---
 client.login(process.env.DISCORD_BOT_TOKEN)

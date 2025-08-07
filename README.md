@@ -43,6 +43,30 @@ Todas as requisições para a API devem incluir um cabeçalho de autorização c
 
 ### Endpoints
 
+#### Recurso: Webhooks
+
+**1. Criar um novo webhook**
+
+Cria um novo webhook em um canal de texto específico com um nome e avatar personalizados.
+
+-   **Endpoint**: `POST /api/v1/webhooks`
+-   **Corpo da Requisição (JSON)**:
+    ```json
+    {
+      "channel_id": "123456789012345678",
+      "user_profile": {
+        "name": "Houston - Deploys",
+        "avatar_url": "[https://site.com/avatar.png](https://site.com/avatar.png)"
+      }
+    }
+    ```
+-   **Exemplo de Resposta (201 Created)**:
+    ```json
+    {
+      "webhookUrl": "[https://discord.com/api/webhooks/](https://discord.com/api/webhooks/)..."
+    }
+    ```
+
 #### Recurso: Servidores (Guilds)
 
 **1. Listar servidores e canais disponíveis**
