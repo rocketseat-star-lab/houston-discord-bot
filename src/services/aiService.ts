@@ -3,6 +3,10 @@ import 'dotenv/config';
 
 const aiApi = axios.create({
   baseURL: process.env.AI_SERVICE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': process.env.AI_SERVICE_API_KEY,
+  }
 });
 
 /**
@@ -12,20 +16,20 @@ const aiApi = axios.create({
  */
 export async function getAiResponse(userMessage: string): Promise<string | null> {
   try {
-    const response = await aiApi.post<{ reply: string }>('/v1/chat', {
+    const response = await aiApi.post<{ response: string, message: string, success: boolean }>('/api/notion', {
       message: userMessage,
     });
 
-    if (response.data && response.data.reply) {
-      return response.data.reply;
+    if (response.data && response.data.response) {
+      return response.data.response;
     }
 
     return 'Desculpe, não consegui obter uma resposta no momento.';
   } catch (error) {
     if (error instanceof Error) {
-        console.error('Erro ao se comunicar com o serviço de IA:', error.message);
+      console.error('Erro ao se comunicar com o serviço de IA:', error.message);
     } else {
-        console.error('Ocorreu um erro desconhecido no serviço de IA.');
+      console.error('Ocorreu um erro desconhecido no serviço de IA.');
     }
     return null;
   }
