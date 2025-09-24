@@ -23,7 +23,7 @@ model ScheduledMessage {
   title          String?
   messageUrl     String?       @map("message_url")
 
-  @@map("scheduled_messages")
+  @@map("houston_bot_scheduled_messages")
 }
 
 // Enum para o status das mensagens, garantindo consistência
