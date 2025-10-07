@@ -24,7 +24,10 @@ export default {
     
     // Remove a menção do bot da mensagem para obter o texto limpo
     const userMessage = message.content.replace(/<@!?\d+>/, '').trim();
-    if (!userMessage) return;
+    if (!userMessage) {
+      await message.reply('Estou ativo e operante!');
+      return;
+    }
 
     try {
       // Agora é 100% seguro chamar sendTyping, pois já validamos o tipo do canal.
