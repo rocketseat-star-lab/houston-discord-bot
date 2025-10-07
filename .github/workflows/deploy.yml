@@ -21,7 +21,7 @@ jobs:
         ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
         # Conectar e fazer deploy
-        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << EOF
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
           # Navegar para o diretório home
           cd ~
 
@@ -32,7 +32,7 @@ jobs:
             git pull origin main
           else
             echo "Clonando repositório pela primeira vez..."
-            git clone https://github.com/\${{ github.repository }}.git houston_bot
+            git clone https://github.com/${{ github.repository }}.git houston_bot
             cd houston_bot
           fi
 
@@ -49,25 +49,9 @@ jobs:
             sudo npm install -g pm2
           fi
 
-          # Criar/atualizar arquivo .env com as variáveis de ambiente
-          cat > .env << 'INNEREOF'
-          DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
-          INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
-          API_PORT=${{ secrets.API_PORT }}
-          AI_AGENT_GUILD_ID=${{ secrets.AI_AGENT_GUILD_ID }}
-          AI_SERVICE_URL=${{ secrets.AI_SERVICE_URL }}
-          AI_SERVICE_API_KEY=${{ secrets.AI_SERVICE_API_KEY }}
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          DIRECT_URL=${{ secrets.DIRECT_URL }}
-          INNEREOF
-
           # Instalar dependências Node.js
           echo "Instalando dependências npm..."
           npm install
-
-          # Executar migrations do Prisma
-          echo "Executando migrations do banco de dados..."
-          npx prisma migrate deploy
 
           # Build do projeto TypeScript
           echo "Fazendo build do projeto..."
@@ -78,4 +62,33 @@ jobs:
           pm2 restart houston_bot || pm2 start dist/index.js --name houston_bot
 
           echo "Deploy concluído com sucesso!"
+        EOF
+
+        # Criar arquivo .env remotamente com as variáveis de ambiente
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash <<EOF
+          cd ~/houston_bot
+          cat > .env <<'INNEREOF'
+DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
+INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
+API_PORT=${{ secrets.API_PORT }}
+AI_AGENT_GUILD_ID=${{ secrets.AI_AGENT_GUILD_ID }}
+AI_SERVICE_URL=${{ secrets.AI_SERVICE_URL }}
+AI_SERVICE_API_KEY=${{ secrets.AI_SERVICE_API_KEY }}
+DATABASE_URL=${{ secrets.DATABASE_URL }}
+DIRECT_URL=${{ secrets.DIRECT_URL }}
+INNEREOF
+EOF
+
+        # Executar migrations do Prisma e reiniciar PM2
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+          cd ~/houston_bot
+
+          # Executar migrations do Prisma
+          echo "Executando migrations do banco de dados..."
+          npx prisma migrate deploy
+
+          # Reiniciar PM2 para carregar novas variáveis
+          pm2 restart houston_bot
+
+          echo "Variáveis de ambiente atualizadas e aplicação reiniciada!"
         EOF
