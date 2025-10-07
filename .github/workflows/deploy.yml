@@ -68,16 +68,16 @@ jobs:
         ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash <<EOF
           cd ~/houston_bot
           cat > .env <<'INNEREOF'
-DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
-INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
-API_PORT=${{ secrets.API_PORT }}
-AI_AGENT_GUILD_ID=${{ secrets.AI_AGENT_GUILD_ID }}
-AI_SERVICE_URL=${{ secrets.AI_SERVICE_URL }}
-AI_SERVICE_API_KEY=${{ secrets.AI_SERVICE_API_KEY }}
-DATABASE_URL=${{ secrets.DATABASE_URL }}
-DIRECT_URL=${{ secrets.DIRECT_URL }}
-INNEREOF
-EOF
+        DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
+        INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
+        API_PORT=${{ secrets.API_PORT }}
+        AI_AGENT_GUILD_ID=${{ secrets.AI_AGENT_GUILD_ID }}
+        AI_SERVICE_URL=${{ secrets.AI_SERVICE_URL }}
+        AI_SERVICE_API_KEY=${{ secrets.AI_SERVICE_API_KEY }}
+        DATABASE_URL=${{ secrets.DATABASE_URL }}
+        DIRECT_URL=${{ secrets.DIRECT_URL }}
+        INNEREOF
+        EOF
 
         # Executar migrations do Prisma e reiniciar PM2
         ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
