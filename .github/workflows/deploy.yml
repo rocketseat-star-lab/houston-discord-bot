@@ -51,15 +51,15 @@ jobs:
 
           # Criar/atualizar arquivo .env com as variáveis de ambiente
           cat > .env << 'ENVEOF'
-DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
-INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
-API_PORT=${{ secrets.API_PORT }}
-AI_AGENT_GUILD_ID=${{ secrets.AI_AGENT_GUILD_ID }}
-AI_SERVICE_URL=${{ secrets.AI_SERVICE_URL }}
-AI_SERVICE_API_KEY=${{ secrets.AI_SERVICE_API_KEY }}
-DATABASE_URL=${{ secrets.DATABASE_URL }}
-DIRECT_URL=${{ secrets.DIRECT_URL }}
-ENVEOF
+          DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
+          INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
+          API_PORT=${{ secrets.API_PORT }}
+          AI_AGENT_GUILD_ID=${{ secrets.AI_AGENT_GUILD_ID }}
+          AI_SERVICE_URL=${{ secrets.AI_SERVICE_URL }}
+          AI_SERVICE_API_KEY=${{ secrets.AI_SERVICE_API_KEY }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          DIRECT_URL=${{ secrets.DIRECT_URL }}
+          ENVEOF
 
           # Instalar dependências Node.js
           echo "Instalando dependências npm..."
