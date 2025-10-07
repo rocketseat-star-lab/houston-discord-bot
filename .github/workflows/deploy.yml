@@ -37,13 +37,15 @@ jobs:
           # Navegar para o diretório home
           cd ~
 
-          # Verificar se o diretório app existe
-          if [ -d "houston_bot" ]; then
+          # Verificar se o diretório app existe e é um repositório git válido
+          if [ -d "houston_bot/.git" ]; then
             echo "Atualizando repositório existente..."
             cd houston_bot
             git pull origin main
           else
-            echo "Clonando repositório pela primeira vez..."
+            echo "Clonando repositório..."
+            # Remove diretório se existir mas não for um git repo válido
+            rm -rf houston_bot
             git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git houston_bot
             cd houston_bot
           fi
