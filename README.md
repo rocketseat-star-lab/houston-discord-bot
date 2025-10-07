@@ -2,7 +2,7 @@
 
 Este projeto contém o código do bot do Discord que serve como um agente de IA e também expõe uma API para agendamento e envio de mensagens.
 
-## Configuração do Ambiente
+## Configuração do Ambiente.
 
 1.  **Clone o repositório:**
     ```bash
