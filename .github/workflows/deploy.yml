@@ -1,0 +1,98 @@
+name: Deploy to VM
+
+on:
+  push:
+    branches: [ main ]  # Ajuste para sua branch principal
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup SSH and Deploy
+      env:
+        DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+        INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+        API_PORT: ${{ secrets.API_PORT }}
+        AI_AGENT_GUILD_ID: ${{ secrets.AI_AGENT_GUILD_ID }}
+        AI_SERVICE_URL: ${{ secrets.AI_SERVICE_URL }}
+        AI_SERVICE_API_KEY: ${{ secrets.AI_SERVICE_API_KEY }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      run: |
+        # Configurar SSH no runner temporário
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+        # Conectar e fazer deploy
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash -s << 'EOF'
+          # Navegar para o diretório home
+          cd ~
+
+          # Verificar se o diretório app existe
+          if [ -d "houston_bot" ]; then
+            echo "Atualizando repositório existente..."
+            cd houston_bot
+            git pull origin main
+          else
+            echo "Clonando repositório pela primeira vez..."
+            git clone https://github.com/${{ github.repository }}.git houston_bot
+            cd houston_bot
+          fi
+
+          # Verificar e instalar Node.js se necessário (Amazon Linux)
+          if ! command -v node &> /dev/null; then
+            echo "Instalando Node.js..."
+            curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+            sudo yum install -y nodejs
+          fi
+
+          # Verificar e instalar PM2 globalmente se necessário
+          if ! command -v pm2 &> /dev/null; then
+            echo "Instalando PM2..."
+            sudo npm install -g pm2
+          fi
+
+          # Instalar dependências Node.js
+          echo "Instalando dependências npm..."
+          npm install
+
+          # Executar migrations do Prisma
+          echo "Executando migrations do banco de dados..."
+          npx prisma migrate deploy
+
+          # Build do projeto TypeScript
+          echo "Fazendo build do projeto..."
+          npm run build
+
+          # Reiniciar aplicação com PM2
+          echo "Reiniciando aplicação PM2..."
+          pm2 restart bot || pm2 start dist/bot.js --name bot
+
+          echo "Deploy concluído com sucesso!"
+        EOF
+
+        # Criar arquivo .env remotamente com as variáveis de ambiente
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash << EOF
+          cd ~/houston_bot
+          cat > .env << 'ENVEOF'
+            DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+            INTERNAL_API_KEY=${INTERNAL_API_KEY}
+            API_PORT=${API_PORT}
+            AI_AGENT_GUILD_ID=${AI_AGENT_GUILD_ID}
+            AI_SERVICE_URL=${AI_SERVICE_URL}
+            AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY}
+            DATABASE_URL=${DATABASE_URL}
+            DIRECT_URL=${DIRECT_URL}
+            ENVEOF
+
+          # Reiniciar PM2 para carregar novas variáveis
+          pm2 restart bot
+        EOF
