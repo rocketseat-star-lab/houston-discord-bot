@@ -16,6 +16,7 @@ jobs:
     
     - name: Setup SSH and Deploy
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
         API_PORT: ${{ secrets.API_PORT }}
@@ -32,7 +33,7 @@ jobs:
         ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
         # Conectar e fazer deploy
-        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash -s << 'EOF'
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash -s << EOF
           # Navegar para o diretório home
           cd ~
 
@@ -43,7 +44,7 @@ jobs:
             git pull origin main
           else
             echo "Clonando repositório pela primeira vez..."
-            git clone https://github.com/${{ github.repository }}.git houston_bot
+            git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git houston_bot
             cd houston_bot
           fi
 
@@ -74,7 +75,7 @@ jobs:
 
           # Reiniciar aplicação com PM2
           echo "Reiniciando aplicação PM2..."
-          pm2 restart bot || pm2 start dist/bot.js --name bot
+          pm2 restart houston_bot || pm2 start dist/bot.js --name houston_bot
 
           echo "Deploy concluído com sucesso!"
         EOF
@@ -94,5 +95,5 @@ jobs:
             ENVEOF
 
           # Reiniciar PM2 para carregar novas variáveis
-          pm2 restart bot
+          pm2 restart houston_bot
         EOF
