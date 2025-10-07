@@ -21,26 +21,34 @@ export default {
     if (!wasMentioned || !isConfiguredGuild) return;
 
     // ---- Lógica Principal ----
-    
+
+    console.log(`💬 New message from ${message.author.tag} in #${message.channel.name}`);
+
     // Remove a menção do bot da mensagem para obter o texto limpo
     const userMessage = message.content.replace(/<@!?\d+>/, '').trim();
     if (!userMessage) {
+      console.log('📭 Empty message received, sending active status');
       await message.reply('Estou ativo e operante!');
       return;
     }
 
+    console.log(`📨 Processing message: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`);
+
     try {
       // Agora é 100% seguro chamar sendTyping, pois já validamos o tipo do canal.
       await message.channel.sendTyping();
+      console.log('🤔 Fetching AI response...');
       const aiReply = await getAiResponse(userMessage);
 
       if (aiReply) {
+        console.log('✅ AI response received, sending reply');
         await message.reply(aiReply);
       } else {
+        console.log('⚠️  No AI response received');
         await message.reply('Não consegui processar sua solicitação no momento. Tente novamente mais tarde.');
       }
     } catch (error) {
-      console.error('Erro ao processar resposta da IA no evento messageCreate:', error);
+      console.error('❌ Error processing AI response in messageCreate event:', error);
     }
   },
 };

@@ -76,13 +76,22 @@ app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes);
 app.use('/api/v1/webhooks', apiKeyAuth, webhooksRoutes); // <-- 2. REGISTRE A NOVA ROTA
 
 // --- INICIALIZAÇÃO GERAL ---
+console.log('🚀 Starting Houston Discord Bot...');
+console.log('⏳ Connecting to Discord...');
+
 client.login(process.env.DISCORD_BOT_TOKEN)
   .then(() => {
+    console.log('✅ 🤖 Discord bot logged in successfully!');
+
+    console.log('⏳ Initializing scheduler...');
     initializeScheduler(client);
+    console.log('✅ 📅 Scheduler initialized!');
+
     app.listen(PORT, () => {
-      console.log(`Servidor da API rodando na porta ${PORT}`);
+      console.log(`✅ 🌐 API Server is running on port ${PORT}`);
+      console.log('🎉 Houston Discord Bot is fully operational!');
     });
   })
   .catch(err => {
-    console.error("Erro ao fazer login no discord:", err);
+    console.error("❌ 🤖 Failed to login to Discord:", err);
   });
