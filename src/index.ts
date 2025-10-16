@@ -13,7 +13,8 @@ import 'dotenv/config';
 import { apiKeyAuth } from './api/middlewares/apiKeyAuth';
 import messageRoutes from './api/routes/messages.routes';
 import guildsRoutes from './api/routes/guilds.routes';
-import webhooksRoutes from './api/routes/webhooks.routes'; // <-- 1. IMPORTE A NOVA ROTA
+import webhooksRoutes from './api/routes/webhooks.routes';
+import healthRoutes from './api/routes/health.routes';
 import { initializeScheduler } from './scheduler/messageScheduler';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
@@ -66,6 +67,10 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // --- ROTAS DA API ---
+// Rota de healthcheck pública (sem autenticação)
+app.use('/api/v1/health', healthRoutes);
+
+// Rota legada de status (mantida por compatibilidade)
 app.get('/status', (req, res) => {
   res.status(200).json({ status: 'API está online' });
 });
@@ -73,7 +78,7 @@ app.get('/status', (req, res) => {
 // Registra as rotas, todas protegidas pela chave de API
 app.use('/api/v1/messages', apiKeyAuth, messageRoutes);
 app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes);
-app.use('/api/v1/webhooks', apiKeyAuth, webhooksRoutes); // <-- 2. REGISTRE A NOVA ROTA
+app.use('/api/v1/webhooks', apiKeyAuth, webhooksRoutes);
 
 // --- INICIALIZAÇÃO GERAL ---
 console.log('🚀 Starting Houston Discord Bot...');
