@@ -75,6 +75,10 @@ app.get('/status', (req, res) => {
   res.status(200).json({ status: 'API está online' });
 });
 
+app.get('/healthcheck', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Registra as rotas, todas protegidas pela chave de API
 app.use('/api/v1/messages', apiKeyAuth, messageRoutes);
 app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes);
