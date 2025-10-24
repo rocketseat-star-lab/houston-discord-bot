@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../../services/prisma';
-import { Client, TextChannel } from 'discord.js';
+import { Client, TextChannel, EmbedBuilder } from 'discord.js';
 import { MessageStatus, Prisma } from '@prisma/client';
 
 // Interfaces atualizadas
@@ -9,6 +9,7 @@ interface ScheduleMessageBody {
   messageContent: string;
   scheduleTime: string;
   title?: string;
+  imageUrl?: string;
 }
 
 interface UpdateScheduleBody {
@@ -16,23 +17,26 @@ interface UpdateScheduleBody {
     messageContent?: string;
     scheduleTime?: string;
     title?: string;
+    imageUrl?: string;
 }
 
 interface SendNowBody {
     channelId: string;
     messageContent: string;
     title?: string;
+    imageUrl?: string;
 }
 
 interface EditSentMessageBody {
     messageContent?: string;
     title?: string;
+    imageUrl?: string;
 }
 
 // --- CRUD para Mensagens Agendadas ---
 
 export async function createScheduledMessage(req: Request<{}, {}, ScheduleMessageBody>, res: Response) {
-  const { channelId, messageContent, scheduleTime, title } = req.body;
+  const { channelId, messageContent, scheduleTime, title, imageUrl } = req.body;
   const discordClient = req.app.get('discordClient') as Client;
 
   if (!channelId || !messageContent || !scheduleTime) {
@@ -46,7 +50,7 @@ export async function createScheduledMessage(req: Request<{}, {}, ScheduleMessag
   if (isNaN(scheduleDate.getTime()) || scheduleDate < new Date()) {
     return res.status(400).json({ error: 'Data de agendamento inválida.' });
   }
-  
+
   try {
     const channel = await discordClient.channels.fetch(channelId);
     if (!channel || !('guildId' in channel)) {
@@ -55,7 +59,7 @@ export async function createScheduledMessage(req: Request<{}, {}, ScheduleMessag
     const guildId = channel.guildId;
 
     const result = await prisma.scheduledMessage.create({
-        data: { guildId, channelId, messageContent, scheduleTime: scheduleDate, title }
+        data: { guildId, channelId, messageContent, scheduleTime: scheduleDate, title, imageUrl }
     });
     res.status(201).json(result);
   } catch (error) {
@@ -104,7 +108,7 @@ export async function updateScheduledMessage(req: Request<{ id: string }, {}, Up
     const messageId = parseInt(req.params.id, 10);
     if (isNaN(messageId)) return res.status(400).json({ error: 'ID da mensagem inválido.' });
 
-    const { channelId, messageContent, scheduleTime, title } = req.body;
+    const { channelId, messageContent, scheduleTime, title, imageUrl } = req.body;
 
     // --- LÓGICA ATUALIZADA AQUI ---
     const dataToUpdate: Prisma.ScheduledMessageUpdateInput = {};
@@ -115,6 +119,7 @@ export async function updateScheduledMessage(req: Request<{ id: string }, {}, Up
     }
     if (channelId) dataToUpdate.channelId = channelId;
     if (messageContent) dataToUpdate.messageContent = messageContent;
+    if (imageUrl !== undefined) dataToUpdate.imageUrl = imageUrl;
     if (scheduleTime) {
         const newScheduleDate = new Date(scheduleTime);
         if (isNaN(newScheduleDate.getTime()) || newScheduleDate < new Date()) {
@@ -161,7 +166,7 @@ export async function deleteScheduledMessage(req: Request<{ id: string }>, res: 
 // --- Ações Imediatas e Pós-Envio ---
 
 export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, res: Response) {
-    const { channelId, messageContent, title } = req.body;
+    const { channelId, messageContent, title, imageUrl } = req.body;
     const discordClient = req.app.get('discordClient') as Client;
 
     if (!channelId || !messageContent) return res.status(400).json({ error: 'Dados ausentes.' });
@@ -170,8 +175,17 @@ export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, re
     try {
         const channel = await discordClient.channels.fetch(channelId);
         if (!(channel instanceof TextChannel)) return res.status(404).json({ error: 'Canal não encontrado ou não é um canal de texto.' });
-        
-        const sentMessage = await channel.send(messageContent);
+
+        // Preparar opções de envio
+        const options: any = { content: messageContent };
+
+        // Adicionar embed com imagem se imageUrl for fornecida
+        if (imageUrl) {
+            const embed = new EmbedBuilder().setImage(imageUrl);
+            options.embeds = [embed];
+        }
+
+        const sentMessage = await channel.send(options);
         const guildId = channel.guildId;
 
         const dbRecord = await prisma.scheduledMessage.create({
@@ -180,6 +194,7 @@ export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, re
                 channelId,
                 messageContent,
                 title,
+                imageUrl,
                 scheduleTime: new Date(),
                 status: 'SENT',
                 messageUrl: sentMessage.url
@@ -196,8 +211,8 @@ export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, re
 export async function editSentMessage(req: Request<{ id: string }, {}, EditSentMessageBody>, res: Response) {
     const messageId = parseInt(req.params.id, 10);
     if (isNaN(messageId)) return res.status(400).json({ error: 'ID da mensagem inválido.' });
-    
-    const { messageContent, title } = req.body;
+
+    const { messageContent, title, imageUrl } = req.body;
     const discordClient = req.app.get('discordClient') as Client;
 
     // --- LÓGICA ATUALIZADA AQUI ---
@@ -207,9 +222,10 @@ export async function editSentMessage(req: Request<{ id: string }, {}, EditSentM
         dataToUpdate.title = title;
     }
     if (messageContent) dataToUpdate.messageContent = messageContent;
+    if (imageUrl !== undefined) dataToUpdate.imageUrl = imageUrl;
 
     if (Object.keys(dataToUpdate).length === 0) {
-        return res.status(400).json({ error: 'Nenhum dado fornecido para atualização (title ou messageContent).' });
+        return res.status(400).json({ error: 'Nenhum dado fornecido para atualização (title, messageContent ou imageUrl).' });
     }
     // --- FIM DA ATUALIZAÇÃO ---
 
@@ -217,15 +233,30 @@ export async function editSentMessage(req: Request<{ id: string }, {}, EditSentM
         const record = await prisma.scheduledMessage.findUnique({ where: { id: messageId } });
         if (!record) return res.status(404).json({ error: 'Registro da mensagem não encontrado.' });
         if (record.status === 'PENDING') return res.status(400).json({ error: 'Esta mensagem ainda está pendente. Use o endpoint de agendamento para editá-la.' });
-        
-        // Se houver novo conteúdo, edita a mensagem no Discord
-        if (messageContent && record.messageUrl) {
+
+        // Se houver novo conteúdo ou imagem, edita a mensagem no Discord
+        if ((messageContent || imageUrl !== undefined) && record.messageUrl) {
             const channel = await discordClient.channels.fetch(record.channelId);
             if (!(channel instanceof TextChannel)) return res.status(404).json({ error: 'Canal da mensagem não encontrado.' });
             const discordMessage = await channel.messages.fetch(record.messageUrl.split('/').pop()!);
-            await discordMessage.edit(messageContent);
+
+            // Preparar opções de edição
+            const editOptions: any = { content: messageContent || record.messageContent };
+
+            // Adicionar ou atualizar embed com imagem
+            if (imageUrl !== undefined) {
+                if (imageUrl) {
+                    const embed = new EmbedBuilder().setImage(imageUrl);
+                    editOptions.embeds = [embed];
+                } else {
+                    // Remove embed se imageUrl for null/empty
+                    editOptions.embeds = [];
+                }
+            }
+
+            await discordMessage.edit(editOptions);
         }
-        
+
         const updatedRecord = await prisma.scheduledMessage.update({ where: { id: messageId }, data: dataToUpdate});
         res.status(200).json(updatedRecord);
 

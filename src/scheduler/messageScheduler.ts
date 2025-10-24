@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import prisma from '../services/prisma';
-import { Client, TextChannel } from 'discord.js';
+import { Client, TextChannel, EmbedBuilder } from 'discord.js';
 import { MessageStatus } from '@prisma/client';
 
 export function initializeScheduler(discordClient: Client) {
@@ -28,9 +28,18 @@ export function initializeScheduler(discordClient: Client) {
 
       try {
         const channel = await discordClient.channels.fetch(msg.channelId);
-        
+
         if (channel instanceof TextChannel) {
-          const sentMessage = await channel.send(msg.messageContent);
+          // Preparar opções de envio
+          const options: any = { content: msg.messageContent };
+
+          // Adicionar embed com imagem se imageUrl estiver presente
+          if (msg.imageUrl) {
+            const embed = new EmbedBuilder().setImage(msg.imageUrl);
+            options.embeds = [embed];
+          }
+
+          const sentMessage = await channel.send(options);
           messageUrl = sentMessage.url;
           console.log(`Mensagem ${msg.id} enviada para o canal ${msg.channelId}.`);
         } else {

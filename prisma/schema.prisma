@@ -22,6 +22,7 @@ model ScheduledMessage {
   status         MessageStatus @default(PENDING)
   title          String?
   messageUrl     String?       @map("message_url")
+  imageUrl       String?       @map("image_url")
 
   @@map("houston_bot_scheduled_messages")
 }
