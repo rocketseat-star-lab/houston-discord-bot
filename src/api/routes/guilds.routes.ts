@@ -6,7 +6,7 @@ const router = Router();
 // Lista todos os servidores onde o bot está
 router.get('/', listGuilds);
 
-// Lista os canais de forum de um servidor específico
+// Lista todos os canais de um servidor específico (incluindo fóruns)
 router.get('/:guildId/forum-channels', listForumChannels);
 
 export default router;
