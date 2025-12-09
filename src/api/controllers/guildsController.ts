@@ -26,7 +26,7 @@ export async function listGuilds(req: Request, res: Response) {
 }
 
 /**
- * Lista os canais dentro da categoria "Oportunidades" de um servidor.
+ * Lista todos os canais de fórum de um servidor.
  */
 export async function listForumChannels(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
@@ -45,22 +45,12 @@ export async function listForumChannels(req: Request, res: Response) {
 
     const channels = await guild.channels.fetch();
 
-    // Busca a categoria que contém "Oportunidades" no nome
-    const oportunidadesCategory = channels.find(
-      channel => channel?.type === ChannelType.GuildCategory &&
-        channel.name.toLowerCase().includes('oportunidades')
-    );
-
-    if (!oportunidadesCategory) {
-      return res.status(200).json({ channels: [] });
-    }
-
-    // Retorna todos os canais dentro dessa categoria
+    // Retorna todos os canais de fórum
     const forumChannels: { id: string; name: string; type: number }[] = [];
 
     channels.forEach(channel => {
       if (!channel) return;
-      if (channel.parentId !== oportunidadesCategory.id) return;
+      if (channel.type !== ChannelType.GuildForum) return;
 
       forumChannels.push({
         id: channel.id,
