@@ -15,8 +15,7 @@ import messageRoutes from './api/routes/messages.routes';
 import guildsRoutes from './api/routes/guilds.routes';
 import webhooksRoutes from './api/routes/webhooks.routes';
 import healthRoutes from './api/routes/health.routes';
-import forumRoutes from './api/routes/forum.routes';
-import dmRoutes from './api/routes/dm.routes';
+import jobsRoutes from './api/routes/jobs.routes';
 import { initializeScheduler } from './scheduler/messageScheduler';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
@@ -85,8 +84,7 @@ app.get('/healthcheck', (req, res) => {
 app.use('/api/v1/messages', apiKeyAuth, messageRoutes);
 app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes);
 app.use('/api/v1/webhooks', apiKeyAuth, webhooksRoutes);
-app.use('/api/v1/forum-threads', apiKeyAuth, forumRoutes);
-app.use('/api/v1/dm', apiKeyAuth, dmRoutes);
+app.use('/api/v1/jobs', apiKeyAuth, jobsRoutes);
 
 // --- INICIALIZAÇÃO GERAL ---
 console.log('🚀 Starting Houston Discord Bot...');
