@@ -43,16 +43,20 @@ export async function listForumChannels(req: Request, res: Response) {
       return res.status(404).json({ error: 'Servidor não encontrado.' });
     }
 
+    // Faz fetch dos canais para garantir que o cache está atualizado
+    const channels = await guild.channels.fetch();
     const botMember = guild.members.me;
 
-    const forumChannels = guild.channels.cache
+    const forumChannels = channels
       .filter((channel): channel is ForumChannel => {
+        if (!channel) return false;
         if (channel.type !== ChannelType.GuildForum) return false;
 
-        // Verifica se o bot tem permissão de enviar mensagens no canal
+        // Verifica se o bot tem permissão de ver e postar no canal
         if (botMember) {
           const permissions = channel.permissionsFor(botMember);
-          if (!permissions?.has(PermissionFlagsBits.SendMessages)) return false;
+          if (!permissions?.has(PermissionFlagsBits.ViewChannel)) return false;
+          if (!permissions?.has(PermissionFlagsBits.SendMessagesInThreads)) return false;
         }
 
         return true;
@@ -63,7 +67,7 @@ export async function listForumChannels(req: Request, res: Response) {
         name: channel.name,
       }));
 
-    res.status(200).json({ channels: forumChannels });
+    res.status(200).json({ channels: Array.from(forumChannels.values()) });
   } catch (error) {
     console.error('Erro ao buscar canais de forum:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de canais.' });
