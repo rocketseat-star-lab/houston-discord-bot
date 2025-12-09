@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Client, ChannelType, PermissionFlagsBits, ForumChannel } from 'discord.js';
+import { Client, ChannelType, PermissionFlagsBits } from 'discord.js';
 
 /**
  * Lista todos os servidores (guilds) em que o bot está.
@@ -26,7 +26,7 @@ export async function listGuilds(req: Request, res: Response) {
 }
 
 /**
- * Lista os canais de forum de um servidor específico.
+ * Lista os canais de forum dentro da categoria "Oportunidades" de um servidor.
  */
 export async function listForumChannels(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
@@ -47,27 +47,44 @@ export async function listForumChannels(req: Request, res: Response) {
     const channels = await guild.channels.fetch();
     const botMember = guild.members.me;
 
-    const forumChannels = channels
-      .filter((channel): channel is ForumChannel => {
-        if (!channel) return false;
-        if (channel.type !== ChannelType.GuildForum) return false;
+    // Busca a categoria que contém "Oportunidades" no nome (case insensitive)
+    const oportunidadesCategory = channels.find(
+      channel => channel?.type === ChannelType.GuildCategory &&
+        channel.name.toLowerCase().includes('oportunidades')
+    );
 
-        // Verifica se o bot tem permissão de ver e postar no canal
-        if (botMember) {
-          const permissions = channel.permissionsFor(botMember);
-          if (!permissions?.has(PermissionFlagsBits.ViewChannel)) return false;
-          if (!permissions?.has(PermissionFlagsBits.SendMessagesInThreads)) return false;
-        }
+    if (!oportunidadesCategory) {
+      return res.status(200).json({ channels: [] });
+    }
 
-        return true;
-      })
-      .sort((a, b) => a.position - b.position)
-      .map(channel => ({
+    // Busca todos os canais dentro dessa categoria
+    const forumChannels: { id: string; name: string; type: number }[] = [];
+
+    channels.forEach(channel => {
+      if (!channel) return;
+      if (channel.parentId !== oportunidadesCategory.id) return;
+
+      // Verifica se o bot tem permissão de ver o canal
+      if (botMember) {
+        const permissions = channel.permissionsFor(botMember);
+        if (!permissions?.has(PermissionFlagsBits.ViewChannel)) return;
+      }
+
+      forumChannels.push({
         id: channel.id,
         name: channel.name,
-      }));
+        type: channel.type,
+      });
+    });
 
-    res.status(200).json({ channels: Array.from(forumChannels.values()) });
+    // Ordena por posição
+    forumChannels.sort((a, b) => {
+      const channelA = channels.get(a.id);
+      const channelB = channels.get(b.id);
+      return (channelA?.position ?? 0) - (channelB?.position ?? 0);
+    });
+
+    res.status(200).json({ channels: forumChannels });
   } catch (error) {
     console.error('Erro ao buscar canais de forum:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de canais.' });
