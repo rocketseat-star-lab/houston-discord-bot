@@ -2,8 +2,7 @@ import { Request, Response } from 'express';
 import { Client, ChannelType } from 'discord.js';
 
 /**
- * Lista todos os servidores (guilds) em que o bot está,
- * junto com seus respectivos canais de texto.
+ * Lista todos os servidores (guilds) em que o bot está.
  */
 export async function listGuilds(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
@@ -13,39 +12,48 @@ export async function listGuilds(req: Request, res: Response) {
   }
 
   try {
-    // Busca os servidores do cache do bot
-    const guilds = discordClient.guilds.cache.map(guild => {
-      
-      // Para cada servidor, busca os canais
-      const channels = guild.channels.cache
-        // Filtra para pegar apenas canais de texto e de anúncios
-        .filter(channel => 
-          channel.type === ChannelType.GuildText || 
-          channel.type === ChannelType.GuildAnnouncement
-        )
-        // Ordena os canais pela sua posição no servidor
-        .sort((a, b) => a.position - b.position)
-        // Mapeia para o formato que o front-end precisa
-        .map(channel => {
-          return {
-            id: channel.id,
-            name: channel.name,
-          };
-        });
-
-      // Retorna o objeto formatado para cada servidor
-      return {
-        id: guild.id,
-        name: guild.name,
-        iconURL: guild.iconURL(), // Retorna a URL do ícone do servidor
-        channels: channels,
-      };
-    });
+    const guilds = discordClient.guilds.cache.map(guild => ({
+      id: guild.id,
+      name: guild.name,
+      iconURL: guild.iconURL(),
+    }));
 
     res.status(200).json(guilds);
-
   } catch (error) {
-    console.error('Erro ao buscar servidores e canais:', error);
+    console.error('Erro ao buscar servidores:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de servidores.' });
+  }
+}
+
+/**
+ * Lista os canais de forum de um servidor específico.
+ */
+export async function listForumChannels(req: Request, res: Response) {
+  const discordClient = req.app.get('discordClient') as Client;
+  const { guildId } = req.params;
+
+  if (!discordClient || !discordClient.isReady()) {
+    return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
+  }
+
+  try {
+    const guild = discordClient.guilds.cache.get(guildId);
+
+    if (!guild) {
+      return res.status(404).json({ error: 'Servidor não encontrado.' });
+    }
+
+    const forumChannels = guild.channels.cache
+      .filter(channel => channel.type === ChannelType.GuildForum)
+      .sort((a, b) => a.position - b.position)
+      .map(channel => ({
+        id: channel.id,
+        name: channel.name,
+      }));
+
+    res.status(200).json({ channels: forumChannels });
+  } catch (error) {
+    console.error('Erro ao buscar canais de forum:', error);
+    res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de canais.' });
   }
 }

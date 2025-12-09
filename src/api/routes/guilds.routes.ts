@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { listGuilds } from '../controllers/guildsController';
+import { listGuilds, listForumChannels } from '../controllers/guildsController';
 
 const router = Router();
 
-// Define a rota GET para a raiz deste router, que será /api/v1/guilds
+// Lista todos os servidores onde o bot está
 router.get('/', listGuilds);
+
+// Lista os canais de forum de um servidor específico
+router.get('/:guildId/forum-channels', listForumChannels);
 
 export default router;
