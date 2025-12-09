@@ -60,29 +60,30 @@ export async function createForumThread(req: Request, res: Response) {
 }
 
 /**
- * Fecha/arquiva uma thread de forum.
+ * Fecha/arquiva uma thread de forum (vaga de emprego).
+ * - Envia mensagem de fechamento
+ * - Renomeia a thread com prefixo "✅ "
+ * - Tranca a thread
  */
 export async function closeForumThread(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
   const { threadId } = req.params;
-  const { closingMessage } = req.body;
+  const { title, closingMessage } = req.body;
 
   if (!discordClient || !discordClient.isReady()) {
     return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
   }
 
   try {
-    const thread = discordClient.channels.cache.get(threadId) as ThreadChannel;
+    let threadChannel = discordClient.channels.cache.get(threadId) as ThreadChannel;
 
-    if (!thread) {
-      // Tenta buscar o canal se não estiver no cache
+    if (!threadChannel) {
       const fetchedChannel = await discordClient.channels.fetch(threadId);
       if (!fetchedChannel || !fetchedChannel.isThread()) {
         return res.status(404).json({ error: 'Thread não encontrada.' });
       }
+      threadChannel = fetchedChannel as ThreadChannel;
     }
-
-    const threadChannel = (thread || await discordClient.channels.fetch(threadId)) as ThreadChannel;
 
     if (!threadChannel.isThread()) {
       return res.status(400).json({ error: 'O canal especificado não é uma thread.' });
@@ -93,11 +94,19 @@ export async function closeForumThread(req: Request, res: Response) {
       await threadChannel.send(closingMessage);
     }
 
-    // Arquiva e tranca a thread
-    await threadChannel.setArchived(true);
+    // Renomeia a thread com prefixo "✅ "
+    const newTitle = title ? `✅ ${title}` : `✅ ${threadChannel.name}`;
+    await threadChannel.setName(newTitle);
+
+    // Tranca a thread (não arquiva para manter visível)
     await threadChannel.setLocked(true);
 
-    res.status(200).json({ success: true });
+    res.status(200).json({
+      success: true,
+      threadId: threadChannel.id,
+      locked: true,
+      newTitle,
+    });
   } catch (error) {
     console.error('Erro ao fechar thread:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao fechar a thread.' });

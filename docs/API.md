@@ -227,7 +227,12 @@ Cria uma nova thread em um canal de fórum.
 
 ### POST `/api/v1/forum-threads/:threadId/close`
 
-Fecha (arquiva e tranca) uma thread de fórum.
+Fecha uma thread de fórum (vaga de emprego).
+
+**Ações realizadas:**
+1. Envia mensagem de fechamento na thread
+2. Renomeia a thread adicionando prefixo "✅ " ao título
+3. Tranca a thread (lock) para impedir novas mensagens
 
 **Autenticação:** Requerida
 
@@ -236,15 +241,17 @@ Fecha (arquiva e tranca) uma thread de fórum.
 |-----------|------|-----------|
 | threadId | string | ID da thread a ser fechada |
 
-**Request Body (opcional):**
+**Request Body:**
 ```json
 {
-  "closingMessage": "Esta vaga foi preenchida. Obrigado a todos os candidatos!"
+  "title": "Desenvolvedor Full Stack - TechCorp",
+  "closingMessage": "🔒 Esta vaga foi encerrada pelo autor e não está mais aceitando candidatos."
 }
 ```
 
 | Campo | Tipo | Obrigatório | Descrição |
 |-------|------|-------------|-----------|
+| title | string | Não | Título para renomear (se não fornecido, usa o título atual) |
 | closingMessage | string | Não | Mensagem enviada antes de fechar |
 
 **Exemplo:**
@@ -255,7 +262,10 @@ POST /api/v1/forum-threads/1234567890123456789/close
 **Response (200):**
 ```json
 {
-  "success": true
+  "success": true,
+  "threadId": "1234567890123456789",
+  "locked": true,
+  "newTitle": "✅ Desenvolvedor Full Stack - TechCorp"
 }
 ```
 
