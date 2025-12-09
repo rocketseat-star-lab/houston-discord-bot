@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Client, ChannelType } from 'discord.js';
+import { Client, ChannelType, PermissionFlagsBits, ForumChannel } from 'discord.js';
 
 /**
  * Lista todos os servidores (guilds) em que o bot está.
@@ -43,8 +43,20 @@ export async function listForumChannels(req: Request, res: Response) {
       return res.status(404).json({ error: 'Servidor não encontrado.' });
     }
 
+    const botMember = guild.members.me;
+
     const forumChannels = guild.channels.cache
-      .filter(channel => channel.type === ChannelType.GuildForum)
+      .filter((channel): channel is ForumChannel => {
+        if (channel.type !== ChannelType.GuildForum) return false;
+
+        // Verifica se o bot tem permissão de enviar mensagens no canal
+        if (botMember) {
+          const permissions = channel.permissionsFor(botMember);
+          if (!permissions?.has(PermissionFlagsBits.SendMessages)) return false;
+        }
+
+        return true;
+      })
       .sort((a, b) => a.position - b.position)
       .map(channel => ({
         id: channel.id,

@@ -24,13 +24,15 @@ export async function sendDm(req: Request, res: Response) {
     }
 
     try {
-      await user.send(content);
+      const message = await user.send(content);
+      res.status(200).json({ success: true, messageId: message.id });
     } catch (dmError: any) {
-      // Usuário pode ter DMs bloqueadas - retorna sucesso mesmo assim
+      // Usuário tem DMs bloqueadas
       console.warn(`Não foi possível enviar DM para ${userId}:`, dmError.message);
+      return res.status(403).json({
+        error: 'Não foi possível enviar a mensagem. O usuário pode ter DMs desabilitadas.'
+      });
     }
-
-    res.status(200).json({ success: true });
   } catch (error) {
     console.error('Erro ao enviar DM:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao enviar a mensagem.' });
