@@ -48,6 +48,9 @@ jobs:
         if [ -d "houston_bot" ]; then
           echo "Updating existing repository..."
           cd houston_bot
+          # Reset any local changes (e.g., yarn.lock modifications from npm install)
+          git reset --hard HEAD
+          git clean -fd
           git pull origin main
         else
           echo "Cloning repository for the first time..."
