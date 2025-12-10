@@ -1,30 +1,45 @@
 import { Request, Response } from 'express';
 import { Client, ChannelType, ForumChannel, ThreadChannel } from 'discord.js';
 
+// Canal fixo para vagas de emprego
+const JOBS_CHANNEL_ID = '1181004381261398188';
+const JOBS_GUILD_ID = '327861810768117763';
+
 /**
- * Cria uma nova thread em um canal de forum.
+ * Cria uma nova thread no canal de vagas (canal fixo).
  */
 export async function createForumThread(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
-  const { channelId, threadName, messageContent, mentionUserId } = req.body;
+  const { threadName, messageContent, mentionUserId } = req.body;
+
+  console.log(`[createForumThread] Recebida requisição para criar thread: ${threadName}`);
 
   if (!discordClient || !discordClient.isReady()) {
-    return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
+    console.error('[createForumThread] Discord client não está pronto');
+    return res.status(503).json({ error: 'Discord client not ready', code: 'CLIENT_NOT_READY' });
   }
 
-  if (!channelId || !threadName || !messageContent) {
-    return res.status(400).json({ error: 'channelId, threadName e messageContent são obrigatórios.' });
+  if (!threadName || !messageContent) {
+    return res.status(400).json({ error: 'threadName e messageContent são obrigatórios', code: 'MISSING_FIELDS' });
   }
 
   try {
-    const channel = discordClient.channels.cache.get(channelId);
+    // Usa o canal fixo de vagas
+    let channel = discordClient.channels.cache.get(JOBS_CHANNEL_ID);
 
     if (!channel) {
-      return res.status(404).json({ error: 'Canal não encontrado.' });
+      console.log(`[createForumThread] Canal não encontrado no cache, buscando: ${JOBS_CHANNEL_ID}`);
+      channel = await discordClient.channels.fetch(JOBS_CHANNEL_ID).catch(() => null) ?? undefined;
+    }
+
+    if (!channel) {
+      console.error(`[createForumThread] Canal de vagas não encontrado: ${JOBS_CHANNEL_ID}`);
+      return res.status(404).json({ error: 'Jobs channel not found', code: 'CHANNEL_NOT_FOUND' });
     }
 
     if (channel.type !== ChannelType.GuildForum) {
-      return res.status(400).json({ error: 'O canal especificado não é um canal de forum.' });
+      console.error(`[createForumThread] Canal não é um fórum: ${JOBS_CHANNEL_ID}`);
+      return res.status(400).json({ error: 'Channel is not a forum', code: 'NOT_A_FORUM' });
     }
 
     const forumChannel = channel as ForumChannel;
@@ -36,6 +51,7 @@ export async function createForumThread(req: Request, res: Response) {
     }
 
     // Cria a thread no forum
+    console.log(`[createForumThread] Criando thread: ${threadName}`);
     const thread = await forumChannel.threads.create({
       name: threadName,
       message: { content },
@@ -46,21 +62,23 @@ export async function createForumThread(req: Request, res: Response) {
 
     // Suprime os embeds de links na mensagem
     if (starterMessage) {
+      console.log(`[createForumThread] Suprimindo embeds da mensagem`);
       await starterMessage.suppressEmbeds(true);
     }
 
     // Monta a URL da mensagem
-    const guildId = forumChannel.guildId;
-    const messageUrl = `https://discord.com/channels/${guildId}/${thread.id}/${starterMessage?.id}`;
+    const messageUrl = `https://discord.com/channels/${JOBS_GUILD_ID}/${thread.id}/${starterMessage?.id}`;
 
+    console.log(`[createForumThread] Thread criada com sucesso: ${thread.id}`);
     res.status(201).json({
+      success: true,
       threadId: thread.id,
       messageId: starterMessage?.id,
       messageUrl,
     });
   } catch (error) {
-    console.error('Erro ao criar thread no forum:', error);
-    res.status(500).json({ error: 'Erro interno do servidor ao criar a thread.' });
+    console.error('[createForumThread] Erro ao criar thread:', error);
+    res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
   }
 }
 
