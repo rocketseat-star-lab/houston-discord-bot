@@ -12,62 +12,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Setup SSH and Deploy
+    - name: Setup SSH
       run: |
-        # Configurar SSH no runner temporário
         mkdir -p ~/.ssh
         echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-        # Conectar e fazer deploy
-        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
-          # Navegar para o diretório home
-          cd ~
-
-          # Verificar se o diretório houston_bot existe
-          if [ -d "houston_bot" ]; then
-            echo "Atualizando repositório existente..."
-            cd houston_bot
-            git pull origin main
-          else
-            echo "Clonando repositório pela primeira vez..."
-            git clone https://github.com/${{ github.repository }}.git houston_bot
-            cd houston_bot
-          fi
-
-          # Verificar e instalar Node.js se necessário (Amazon Linux)
-          if ! command -v node &> /dev/null; then
-            echo "Instalando Node.js..."
-            curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
-            sudo yum install -y nodejs
-          fi
-
-          # Verificar e instalar PM2 globalmente se necessário
-          if ! command -v pm2 &> /dev/null; then
-            echo "Instalando PM2..."
-            sudo npm install -g pm2
-          fi
-
-          # Instalar dependências Node.js
-          echo "Instalando dependências npm..."
-          npm install
-
-          # Build do projeto TypeScript
-          echo "Fazendo build do projeto..."
-          npm run build
-
-          # Reiniciar aplicação com PM2
-          echo "Reiniciando aplicação PM2..."
-          pm2 restart houston_bot || pm2 start dist/index.js --name houston_bot
-
-          echo "Deploy concluído com sucesso!"
-        EOF
-
-        # Criar arquivo .env remotamente com as variáveis de ambiente
+    - name: Create .env file
+      run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash <<EOF
-          cd ~/houston_bot
-          cat > .env <<'INNEREOF'
+        set -e
+        mkdir -p ~/houston_bot
+        cd ~/houston_bot
+        cat > .env <<'INNEREOF'
         DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
         INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
         API_PORT=${{ secrets.API_PORT }}
@@ -77,18 +35,92 @@ jobs:
         DATABASE_URL=${{ secrets.DATABASE_URL }}
         DIRECT_URL=${{ secrets.DIRECT_URL }}
         INNEREOF
+        echo ".env file created successfully"
         EOF
 
-        # Executar migrations do Prisma e reiniciar PM2
+    - name: Pull code and build
+      run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
-          cd ~/houston_bot
+        set -e
+        cd ~
 
-          # Executar migrations do Prisma
-          echo "Executando migrations do banco de dados..."
-          npx prisma migrate deploy
+        # Clone or update repository
+        if [ -d "houston_bot" ]; then
+          echo "Updating existing repository..."
+          cd houston_bot
+          git pull origin main
+        else
+          echo "Cloning repository for the first time..."
+          git clone https://github.com/${{ github.repository }}.git houston_bot
+          cd houston_bot
+        fi
 
-          # Reiniciar PM2 para carregar novas variáveis
-          pm2 restart houston_bot
+        # Install Node.js if needed (Amazon Linux)
+        if ! command -v node &> /dev/null; then
+          echo "Installing Node.js..."
+          curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+          sudo yum install -y nodejs
+        fi
 
-          echo "Variáveis de ambiente atualizadas e aplicação reiniciada!"
+        # Install PM2 globally if needed
+        if ! command -v pm2 &> /dev/null; then
+          echo "Installing PM2..."
+          sudo npm install -g pm2
+        fi
+
+        # Install dependencies
+        echo "Installing npm dependencies..."
+        npm install
+
+        # Build TypeScript project
+        echo "Building project..."
+        npm run build
+
+        echo "Build completed successfully!"
+        EOF
+
+    - name: Run database migrations
+      run: |
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+        set -e
+        cd ~/houston_bot
+        echo "Running database migrations..."
+        npx prisma migrate deploy
+        echo "Migrations completed successfully!"
+        EOF
+
+    - name: Restart PM2 application
+      run: |
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+        set -e
+        cd ~/houston_bot
+
+        echo "Restarting PM2 application..."
+        
+        # Check if process exists and restart, otherwise start new
+        if pm2 describe houston_bot > /dev/null 2>&1; then
+          pm2 restart houston_bot --update-env
+          echo "PM2 process restarted with updated environment"
+        else
+          pm2 start dist/index.js --name houston_bot
+          echo "PM2 process started for the first time"
+        fi
+
+        # Wait a moment for the app to initialize
+        sleep 3
+
+        # Verify the application is running
+        echo "Verifying PM2 status..."
+        pm2 status houston_bot
+
+        # Check if the process is online
+        PM2_STATUS=$(pm2 jlist | jq -r '.[] | select(.name=="houston_bot") | .pm2_env.status')
+        if [ "$PM2_STATUS" != "online" ]; then
+          echo "ERROR: Application failed to start! Status: $PM2_STATUS"
+          echo "Recent logs:"
+          pm2 logs houston_bot --lines 20 --nostream
+          exit 1
+        fi
+
+        echo "Deploy completed successfully! Application is running."
         EOF
