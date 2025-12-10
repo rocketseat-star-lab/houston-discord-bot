@@ -67,53 +67,64 @@ export async function createForumThread(req: Request, res: Response) {
 /**
  * Fecha/arquiva uma thread de forum (vaga de emprego).
  * - Envia mensagem de fechamento
- * - Renomeia a thread com prefixo "✅ "
- * - Tranca a thread
+ * - Renomeia a thread com prefixo "[FECHADA]"
+ * - Arquiva e tranca a thread
  */
 export async function closeForumThread(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
   const { threadId } = req.params;
   const { title, closingMessage } = req.body;
 
+  console.log(`[closeForumThread] Recebida requisição para fechar thread: ${threadId}`);
+
   if (!discordClient || !discordClient.isReady()) {
-    return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
+    console.error('[closeForumThread] Discord client não está pronto');
+    return res.status(503).json({ error: 'Discord client not ready', code: 'CLIENT_NOT_READY' });
   }
 
   try {
     let threadChannel = discordClient.channels.cache.get(threadId) as ThreadChannel;
 
     if (!threadChannel) {
-      const fetchedChannel = await discordClient.channels.fetch(threadId);
+      console.log(`[closeForumThread] Thread não encontrada no cache, buscando: ${threadId}`);
+      const fetchedChannel = await discordClient.channels.fetch(threadId).catch(() => null);
       if (!fetchedChannel || !fetchedChannel.isThread()) {
-        return res.status(404).json({ error: 'Thread não encontrada.' });
+        console.error(`[closeForumThread] Thread não encontrada: ${threadId}`);
+        return res.status(404).json({ error: 'Thread not found', code: 'THREAD_NOT_FOUND' });
       }
       threadChannel = fetchedChannel as ThreadChannel;
     }
 
     if (!threadChannel.isThread()) {
-      return res.status(400).json({ error: 'O canal especificado não é uma thread.' });
+      console.error(`[closeForumThread] Canal não é uma thread: ${threadId}`);
+      return res.status(400).json({ error: 'Channel is not a thread', code: 'NOT_A_THREAD' });
     }
+
+    console.log(`[closeForumThread] Thread encontrada: ${threadChannel.name}`);
 
     // Envia a mensagem de fechamento se fornecida
     if (closingMessage) {
+      console.log(`[closeForumThread] Enviando mensagem de fechamento`);
       await threadChannel.send(closingMessage);
     }
 
-    // Renomeia a thread com prefixo "✅ "
-    const newTitle = title ? `✅ ${title}` : `✅ ${threadChannel.name}`;
+    // Renomeia a thread com prefixo "[FECHADA]"
+    const newTitle = title ? `[FECHADA] ${title}` : `[FECHADA] ${threadChannel.name}`;
+    console.log(`[closeForumThread] Renomeando thread para: ${newTitle}`);
     await threadChannel.setName(newTitle);
 
-    // Tranca a thread (não arquiva para manter visível)
+    // Arquiva e tranca a thread
+    console.log(`[closeForumThread] Arquivando e trancando thread`);
+    await threadChannel.setArchived(true);
     await threadChannel.setLocked(true);
 
+    console.log(`[closeForumThread] Thread fechada com sucesso: ${threadId}`);
     res.status(200).json({
       success: true,
       threadId: threadChannel.id,
-      locked: true,
-      newTitle,
     });
   } catch (error) {
-    console.error('Erro ao fechar thread:', error);
-    res.status(500).json({ error: 'Erro interno do servidor ao fechar a thread.' });
+    console.error('[closeForumThread] Erro ao fechar thread:', error);
+    res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
   }
 }
