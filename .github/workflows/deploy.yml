@@ -75,21 +75,19 @@ jobs:
         echo "Installing npm dependencies..."
         npm install
 
+        # Run database migrations
+        echo "Running database migrations..."
+        npx prisma migrate deploy
+
+        # Generate Prisma client (ensures types match schema after migrations)
+        echo "Generating Prisma client..."
+        npx prisma generate
+
         # Build TypeScript project
         echo "Building project..."
         npm run build
 
         echo "Build completed successfully!"
-        EOF
-
-    - name: Run database migrations
-      run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
-        set -e
-        cd ~/houston_bot
-        echo "Running database migrations..."
-        npx prisma migrate deploy
-        echo "Migrations completed successfully!"
         EOF
 
     - name: Restart PM2 application
