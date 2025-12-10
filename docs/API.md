@@ -1,21 +1,21 @@
-# Houston Discord Bot - Documentação da API
+# Houston Discord Bot - Documentacao da API
 
-## Sumário
+## Sumario
 
-1. [Autenticação](#autenticação)
+1. [Autenticacao](#autenticacao)
 2. [Health Check](#health-check)
 3. [Guilds (Servidores)](#guilds-servidores)
 4. [Forum Threads](#forum-threads)
 5. [Direct Messages (DM)](#direct-messages-dm)
 6. [Mensagens Agendadas](#mensagens-agendadas)
 7. [Webhooks](#webhooks)
-8. [Códigos de Erro](#códigos-de-erro)
+8. [Codigos de Erro](#codigos-de-erro)
 
 ---
 
-## Autenticação
+## Autenticacao
 
-Todas as rotas (exceto health check) requerem autenticação via header `Authorization`.
+Todas as rotas (exceto health check) requerem autenticacao via header `Authorization`.
 
 **Header:**
 ```
@@ -30,10 +30,10 @@ curl -X GET "https://api.exemplo.com/api/v1/guilds" \
   -H "Content-Type: application/json"
 ```
 
-**Erro de autenticação (403):**
+**Erro de autenticacao (403):**
 ```json
 {
-  "error": "Acesso proibido: chave de API inválida."
+  "error": "Acesso proibido: chave de API invalida."
 }
 ```
 
@@ -43,9 +43,9 @@ curl -X GET "https://api.exemplo.com/api/v1/guilds" \
 
 ### GET `/api/v1/health`
 
-Verifica o status da aplicação, conexão com Discord e banco de dados.
+Verifica o status da aplicacao, conexao com Discord e banco de dados.
 
-**Autenticação:** Não requerida
+**Autenticacao:** Nao requerida
 
 **Response (200 - Healthy):**
 ```json
@@ -82,18 +82,18 @@ Verifica o status da aplicação, conexão com Discord e banco de dados.
 
 ### GET `/status` (Legado)
 
-**Autenticação:** Não requerida
+**Autenticacao:** Nao requerida
 
 **Response (200):**
 ```json
 {
-  "status": "API está online"
+  "status": "API esta online"
 }
 ```
 
 ### GET `/healthcheck` (Legado)
 
-**Autenticação:** Não requerida
+**Autenticacao:** Nao requerida
 
 **Response (200):**
 ```json
@@ -108,9 +108,9 @@ Verifica o status da aplicação, conexão com Discord e banco de dados.
 
 ### GET `/api/v1/guilds`
 
-Lista todos os servidores onde o bot está presente.
+Lista todos os servidores onde o bot esta presente, incluindo todos os canais de cada servidor.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
 **Response (200):**
 ```json
@@ -118,32 +118,56 @@ Lista todos os servidores onde o bot está presente.
   {
     "id": "327861810768117763",
     "name": "Rocketseat",
-    "iconURL": "https://cdn.discordapp.com/icons/327861810768117763/abc123.png"
-  },
-  {
-    "id": "123456789012345678",
-    "name": "Outro Servidor",
-    "iconURL": null
+    "iconURL": "https://cdn.discordapp.com/icons/327861810768117763/abc123.png",
+    "channels": [
+      {
+        "id": "1181004381261398188",
+        "name": "vagas",
+        "type": 15,
+        "typeName": "GuildForum"
+      },
+      {
+        "id": "327861810768117764",
+        "name": "geral",
+        "type": 0,
+        "typeName": "GuildText"
+      },
+      {
+        "id": "327861810768117765",
+        "name": "anuncios",
+        "type": 5,
+        "typeName": "GuildAnnouncement"
+      }
+    ]
   }
 ]
 ```
 
+**Tipos de canal:**
+| type | typeName | Descricao |
+|------|----------|-----------|
+| 0 | GuildText | Canal de texto |
+| 2 | GuildVoice | Canal de voz |
+| 4 | GuildCategory | Categoria |
+| 5 | GuildAnnouncement | Canal de anuncios |
+| 15 | GuildForum | Canal de forum |
+
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 503 | Cliente Discord não disponível |
+| 503 | Cliente Discord nao disponivel |
 | 500 | Erro interno do servidor |
 
 ---
 
 ### GET `/api/v1/guilds/:guildId/forum-channels`
 
-Lista todos os canais de fórum de um servidor específico.
+Lista apenas os canais de forum de um servidor especifico.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
-**Parâmetros de URL:**
-| Parâmetro | Tipo | Descrição |
+**Parametros de URL:**
+| Parametro | Tipo | Descricao |
 |-----------|------|-----------|
 | guildId | string | ID do servidor Discord |
 
@@ -159,24 +183,20 @@ GET /api/v1/guilds/327861810768117763/forum-channels
     {
       "id": "1181004381261398188",
       "name": "vagas",
-      "type": 15
-    },
-    {
-      "id": "1234567890123456789",
-      "name": "duvidas",
-      "type": 15
+      "type": 15,
+      "typeName": "GuildForum"
     }
   ]
 }
 ```
 
-> **Nota:** `type: 15` representa um canal de fórum no Discord.
+> **Nota:** Este endpoint retorna apenas canais do tipo forum (type: 15).
 
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 404 | Servidor não encontrado |
-| 503 | Cliente Discord não disponível |
+| 404 | Servidor nao encontrado |
+| 503 | Cliente Discord nao disponivel |
 | 500 | Erro interno do servidor |
 
 ---
@@ -185,30 +205,31 @@ GET /api/v1/guilds/327861810768117763/forum-channels
 
 ### POST `/api/v1/forum-threads`
 
-Cria uma nova thread em um canal de fórum.
+Cria uma nova thread em um canal de forum.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
 **Request Body:**
 ```json
 {
   "channelId": "1181004381261398188",
   "threadName": "Vaga: Desenvolvedor Full Stack - Empresa XYZ",
-  "messageContent": "Descrição completa da vaga...",
+  "messageContent": "Descricao completa da vaga...",
   "mentionUserId": "987654321098765432"
 }
 ```
 
-| Campo | Tipo | Obrigatório | Descrição |
+| Campo | Tipo | Obrigatorio | Descricao |
 |-------|------|-------------|-----------|
-| channelId | string | Sim | ID do canal de fórum |
-| threadName | string | Sim | Título da thread |
-| messageContent | string | Sim | Conteúdo da mensagem inicial |
-| mentionUserId | string | Não | ID do usuário a ser mencionado |
+| channelId | string | Sim | ID do canal de forum |
+| threadName | string | Sim | Titulo da thread |
+| messageContent | string | Sim | Conteudo da mensagem inicial |
+| mentionUserId | string | Nao | ID do usuario a ser mencionado |
 
 **Response (201):**
 ```json
 {
+  "success": true,
   "threadId": "1234567890123456789",
   "messageId": "1234567890123456790",
   "messageUrl": "https://discord.com/channels/327861810768117763/1234567890123456789/1234567890123456790"
@@ -216,28 +237,32 @@ Cria uma nova thread em um canal de fórum.
 ```
 
 **Erros:**
-| Status | Descrição |
-|--------|-----------|
-| 400 | Parâmetros obrigatórios faltando ou canal não é fórum |
-| 404 | Canal não encontrado |
-| 503 | Cliente Discord não disponível |
-| 500 | Erro interno do servidor |
+| Status | Response | Descricao |
+|--------|----------|-----------|
+| 400 | `{ "error": "...", "code": "MISSING_FIELDS" }` | Parametros obrigatorios faltando |
+| 400 | `{ "error": "...", "code": "NOT_A_FORUM" }` | Canal nao e um forum |
+| 404 | `{ "error": "...", "code": "CHANNEL_NOT_FOUND" }` | Canal nao encontrado |
+| 503 | `{ "error": "...", "code": "CLIENT_NOT_READY" }` | Cliente Discord nao disponivel |
+| 500 | `{ "error": "...", "code": "INTERNAL_ERROR" }` | Erro interno do servidor |
+
+> **Nota:** Os embeds de links sao automaticamente suprimidos na mensagem inicial.
 
 ---
 
 ### POST `/api/v1/forum-threads/:threadId/close`
 
-Fecha uma thread de fórum (vaga de emprego).
+Fecha uma thread de forum (vaga de emprego).
 
-**Ações realizadas:**
-1. Envia mensagem de fechamento na thread
-2. Renomeia a thread adicionando prefixo "✅ " ao título
-3. Tranca a thread (lock) para impedir novas mensagens
+**Acoes realizadas:**
+1. Envia mensagem de fechamento na thread (se fornecida)
+2. Renomeia a thread adicionando prefixo `[FECHADA]` ao titulo
+3. Arquiva a thread (archived: true)
+4. Tranca a thread (locked: true)
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
-**Parâmetros de URL:**
-| Parâmetro | Tipo | Descrição |
+**Parametros de URL:**
+| Parametro | Tipo | Descricao |
 |-----------|------|-----------|
 | threadId | string | ID da thread a ser fechada |
 
@@ -245,14 +270,14 @@ Fecha uma thread de fórum (vaga de emprego).
 ```json
 {
   "title": "Desenvolvedor Full Stack - TechCorp",
-  "closingMessage": "🔒 Esta vaga foi encerrada pelo autor e não está mais aceitando candidatos."
+  "closingMessage": "Esta vaga foi encerrada pelo autor e nao esta mais aceitando candidatos."
 }
 ```
 
-| Campo | Tipo | Obrigatório | Descrição |
+| Campo | Tipo | Obrigatorio | Descricao |
 |-------|------|-------------|-----------|
-| title | string | Não | Título para renomear (se não fornecido, usa o título atual) |
-| closingMessage | string | Não | Mensagem enviada antes de fechar |
+| title | string | Nao | Titulo para renomear (se nao fornecido, usa o titulo atual) |
+| closingMessage | string | Nao | Mensagem enviada antes de fechar |
 
 **Exemplo:**
 ```
@@ -263,19 +288,17 @@ POST /api/v1/forum-threads/1234567890123456789/close
 ```json
 {
   "success": true,
-  "threadId": "1234567890123456789",
-  "locked": true,
-  "newTitle": "✅ Desenvolvedor Full Stack - TechCorp"
+  "threadId": "1234567890123456789"
 }
 ```
 
 **Erros:**
-| Status | Descrição |
-|--------|-----------|
-| 400 | Canal especificado não é uma thread |
-| 404 | Thread não encontrada |
-| 503 | Cliente Discord não disponível |
-| 500 | Erro interno do servidor |
+| Status | Response | Descricao |
+|--------|----------|-----------|
+| 400 | `{ "error": "...", "code": "NOT_A_THREAD" }` | Canal nao e uma thread |
+| 404 | `{ "error": "...", "code": "THREAD_NOT_FOUND" }` | Thread nao encontrada |
+| 503 | `{ "error": "...", "code": "CLIENT_NOT_READY" }` | Cliente Discord nao disponivel |
+| 500 | `{ "error": "...", "code": "INTERNAL_ERROR" }` | Erro interno do servidor |
 
 ---
 
@@ -283,22 +306,22 @@ POST /api/v1/forum-threads/1234567890123456789/close
 
 ### POST `/api/v1/dm`
 
-Envia uma mensagem direta (DM) para um usuário do Discord.
+Envia uma mensagem direta (DM) para um usuario do Discord.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
 **Request Body:**
 ```json
 {
   "userId": "987654321098765432",
-  "content": "Olá! Sua vaga foi publicada com sucesso no servidor."
+  "content": "Ola! Sua vaga foi publicada com sucesso no servidor."
 }
 ```
 
-| Campo | Tipo | Obrigatório | Descrição |
+| Campo | Tipo | Obrigatorio | Descricao |
 |-------|------|-------------|-----------|
-| userId | string | Sim | ID do usuário Discord |
-| content | string | Sim | Conteúdo da mensagem |
+| userId | string | Sim | ID do usuario Discord |
+| content | string | Sim | Conteudo da mensagem |
 
 **Response (200):**
 ```json
@@ -309,18 +332,18 @@ Envia uma mensagem direta (DM) para um usuário do Discord.
 ```
 
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 400 | Parâmetros obrigatórios faltando |
-| 403 | Usuário tem DMs desabilitadas |
-| 404 | Usuário não encontrado |
-| 503 | Cliente Discord não disponível |
+| 400 | Parametros obrigatorios faltando |
+| 403 | Usuario tem DMs desabilitadas |
+| 404 | Usuario nao encontrado |
+| 503 | Cliente Discord nao disponivel |
 | 500 | Erro interno do servidor |
 
 **Erro 403 (DMs bloqueadas):**
 ```json
 {
-  "error": "Não foi possível enviar a mensagem. O usuário pode ter DMs desabilitadas."
+  "error": "Nao foi possivel enviar a mensagem. O usuario pode ter DMs desabilitadas."
 }
 ```
 
@@ -332,26 +355,26 @@ Envia uma mensagem direta (DM) para um usuário do Discord.
 
 Cria uma nova mensagem agendada.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
 **Request Body:**
 ```json
 {
   "channelId": "1234567890123456789",
-  "messageContent": "Conteúdo da mensagem a ser enviada",
+  "messageContent": "Conteudo da mensagem a ser enviada",
   "scheduleTime": "2024-12-25T10:00:00.000Z",
-  "title": "Título opcional",
+  "title": "Titulo opcional",
   "imageUrl": "https://exemplo.com/imagem.png"
 }
 ```
 
-| Campo | Tipo | Obrigatório | Descrição |
+| Campo | Tipo | Obrigatorio | Descricao |
 |-------|------|-------------|-----------|
 | channelId | string | Sim | ID do canal de texto |
-| messageContent | string | Sim | Conteúdo da mensagem |
+| messageContent | string | Sim | Conteudo da mensagem |
 | scheduleTime | string (ISO 8601) | Sim | Data/hora do envio |
-| title | string | Não | Título (máx. 30 caracteres) |
-| imageUrl | string | Não | URL de imagem para embed |
+| title | string | Nao | Titulo (max. 30 caracteres) |
+| imageUrl | string | Nao | URL de imagem para embed |
 
 **Response (201):**
 ```json
@@ -359,9 +382,9 @@ Cria uma nova mensagem agendada.
   "id": 1,
   "guildId": "327861810768117763",
   "channelId": "1234567890123456789",
-  "messageContent": "Conteúdo da mensagem",
+  "messageContent": "Conteudo da mensagem",
   "scheduleTime": "2024-12-25T10:00:00.000Z",
-  "title": "Título opcional",
+  "title": "Titulo opcional",
   "imageUrl": "https://exemplo.com/imagem.png",
   "status": "PENDING",
   "messageUrl": null,
@@ -371,25 +394,25 @@ Cria uma nova mensagem agendada.
 ```
 
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 400 | Dados ausentes, título > 30 chars, ou data inválida |
-| 404 | Canal não encontrado |
+| 400 | Dados ausentes, titulo > 30 chars, ou data invalida |
+| 404 | Canal nao encontrado |
 | 500 | Erro interno do servidor |
 
 ---
 
 ### GET `/api/v1/messages/scheduled`
 
-Lista mensagens agendadas com paginação e filtros.
+Lista mensagens agendadas com paginacao e filtros.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
 **Query Parameters:**
-| Parâmetro | Tipo | Padrão | Descrição |
+| Parametro | Tipo | Padrao | Descricao |
 |-----------|------|--------|-----------|
-| page | number | 1 | Página atual |
-| limit | number | 20 | Itens por página |
+| page | number | 1 | Pagina atual |
+| limit | number | 20 | Itens por pagina |
 | status | string | - | Filtro: PENDING, SENT, ERROR_SENDING, ERROR_CHANNEL_NOT_FOUND |
 | guildId | string | - | Filtro por servidor |
 | startDate | string | - | Data inicial (ISO 8601) |
@@ -409,9 +432,9 @@ GET /api/v1/messages/scheduled?page=1&limit=10&status=PENDING&guildId=3278618107
       "guildId": "327861810768117763",
       "guildName": "Rocketseat",
       "channelId": "1234567890123456789",
-      "messageContent": "Conteúdo da mensagem",
+      "messageContent": "Conteudo da mensagem",
       "scheduleTime": "2024-12-25T10:00:00.000Z",
-      "title": "Título",
+      "title": "Titulo",
       "imageUrl": null,
       "status": "PENDING",
       "messageUrl": null,
@@ -429,10 +452,10 @@ GET /api/v1/messages/scheduled?page=1&limit=10&status=PENDING&guildId=3278618107
 
 Atualiza uma mensagem agendada pendente.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
-**Parâmetros de URL:**
-| Parâmetro | Tipo | Descrição |
+**Parametros de URL:**
+| Parametro | Tipo | Descricao |
 |-----------|------|-----------|
 | id | number | ID da mensagem agendada |
 
@@ -440,9 +463,9 @@ Atualiza uma mensagem agendada pendente.
 ```json
 {
   "channelId": "1234567890123456789",
-  "messageContent": "Novo conteúdo",
+  "messageContent": "Novo conteudo",
   "scheduleTime": "2024-12-26T10:00:00.000Z",
-  "title": "Novo título",
+  "title": "Novo titulo",
   "imageUrl": "https://exemplo.com/nova-imagem.png"
 }
 ```
@@ -453,9 +476,9 @@ Atualiza uma mensagem agendada pendente.
   "id": 1,
   "guildId": "327861810768117763",
   "channelId": "1234567890123456789",
-  "messageContent": "Novo conteúdo",
+  "messageContent": "Novo conteudo",
   "scheduleTime": "2024-12-26T10:00:00.000Z",
-  "title": "Novo título",
+  "title": "Novo titulo",
   "imageUrl": "https://exemplo.com/nova-imagem.png",
   "status": "PENDING",
   "messageUrl": null,
@@ -465,10 +488,10 @@ Atualiza uma mensagem agendada pendente.
 ```
 
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 400 | ID inválido, título > 30 chars, data no passado, ou nenhum dado fornecido |
-| 404 | Mensagem pendente não encontrada |
+| 400 | ID invalido, titulo > 30 chars, data no passado, ou nenhum dado fornecido |
+| 404 | Mensagem pendente nao encontrada |
 | 500 | Erro interno do servidor |
 
 > **Nota:** Apenas mensagens com status `PENDING` podem ser editadas.
@@ -479,20 +502,20 @@ Atualiza uma mensagem agendada pendente.
 
 Deleta uma mensagem agendada.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
-**Parâmetros de URL:**
-| Parâmetro | Tipo | Descrição |
+**Parametros de URL:**
+| Parametro | Tipo | Descricao |
 |-----------|------|-----------|
 | id | number | ID da mensagem agendada |
 
-**Response (204):** Sem conteúdo
+**Response (204):** Sem conteudo
 
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 400 | ID inválido |
-| 404 | Mensagem não encontrada |
+| 400 | ID invalido |
+| 404 | Mensagem nao encontrada |
 | 500 | Erro interno do servidor |
 
 ---
@@ -501,24 +524,24 @@ Deleta uma mensagem agendada.
 
 Envia uma mensagem imediatamente para um canal.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
 **Request Body:**
 ```json
 {
   "channelId": "1234567890123456789",
-  "messageContent": "Conteúdo da mensagem",
-  "title": "Título opcional",
+  "messageContent": "Conteudo da mensagem",
+  "title": "Titulo opcional",
   "imageUrl": "https://exemplo.com/imagem.png"
 }
 ```
 
-| Campo | Tipo | Obrigatório | Descrição |
+| Campo | Tipo | Obrigatorio | Descricao |
 |-------|------|-------------|-----------|
 | channelId | string | Sim | ID do canal de texto |
-| messageContent | string | Sim | Conteúdo da mensagem |
-| title | string | Não | Título (máx. 30 caracteres) |
-| imageUrl | string | Não | URL de imagem para embed |
+| messageContent | string | Sim | Conteudo da mensagem |
+| title | string | Nao | Titulo (max. 30 caracteres) |
+| imageUrl | string | Nao | URL de imagem para embed |
 
 **Response (201):**
 ```json
@@ -526,9 +549,9 @@ Envia uma mensagem imediatamente para um canal.
   "id": 1,
   "guildId": "327861810768117763",
   "channelId": "1234567890123456789",
-  "messageContent": "Conteúdo da mensagem",
+  "messageContent": "Conteudo da mensagem",
   "scheduleTime": "2024-01-15T10:30:00.000Z",
-  "title": "Título",
+  "title": "Titulo",
   "imageUrl": "https://exemplo.com/imagem.png",
   "status": "SENT",
   "messageUrl": "https://discord.com/channels/327861810768117763/1234567890123456789/9876543210987654321",
@@ -541,20 +564,20 @@ Envia uma mensagem imediatamente para um canal.
 
 ### PATCH `/api/v1/messages/sent/:id`
 
-Edita uma mensagem já enviada no Discord.
+Edita uma mensagem ja enviada no Discord.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
-**Parâmetros de URL:**
-| Parâmetro | Tipo | Descrição |
+**Parametros de URL:**
+| Parametro | Tipo | Descricao |
 |-----------|------|-----------|
 | id | number | ID do registro da mensagem |
 
 **Request Body (pelo menos um campo):**
 ```json
 {
-  "messageContent": "Conteúdo atualizado",
-  "title": "Novo título",
+  "messageContent": "Conteudo atualizado",
+  "title": "Novo titulo",
   "imageUrl": "https://exemplo.com/nova-imagem.png"
 }
 ```
@@ -565,9 +588,9 @@ Edita uma mensagem já enviada no Discord.
   "id": 1,
   "guildId": "327861810768117763",
   "channelId": "1234567890123456789",
-  "messageContent": "Conteúdo atualizado",
+  "messageContent": "Conteudo atualizado",
   "scheduleTime": "2024-01-15T10:30:00.000Z",
-  "title": "Novo título",
+  "title": "Novo titulo",
   "imageUrl": "https://exemplo.com/nova-imagem.png",
   "status": "SENT",
   "messageUrl": "https://discord.com/channels/...",
@@ -577,13 +600,13 @@ Edita uma mensagem já enviada no Discord.
 ```
 
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 400 | ID inválido, título > 30 chars, nenhum dado fornecido, ou mensagem ainda pendente |
-| 404 | Registro ou canal não encontrado |
+| 400 | ID invalido, titulo > 30 chars, nenhum dado fornecido, ou mensagem ainda pendente |
+| 404 | Registro ou canal nao encontrado |
 | 500 | Erro interno do servidor |
 
-> **Nota:** Não pode ser usado para mensagens com status `PENDING`. Use `PUT /api/v1/messages/scheduled/:id`.
+> **Nota:** Nao pode ser usado para mensagens com status `PENDING`. Use `PUT /api/v1/messages/scheduled/:id`.
 
 ---
 
@@ -591,23 +614,23 @@ Edita uma mensagem já enviada no Discord.
 
 Deleta uma mensagem enviada do Discord e do banco de dados.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
-**Parâmetros de URL:**
-| Parâmetro | Tipo | Descrição |
+**Parametros de URL:**
+| Parametro | Tipo | Descricao |
 |-----------|------|-----------|
 | id | number | ID do registro da mensagem |
 
-**Response (204):** Sem conteúdo
+**Response (204):** Sem conteudo
 
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 400 | ID inválido |
-| 404 | Registro não encontrado |
+| 400 | ID invalido |
+| 404 | Registro nao encontrado |
 | 500 | Erro interno do servidor |
 
-> **Nota:** Se a mensagem já foi deletada do Discord, apenas o registro do banco é removido.
+> **Nota:** Se a mensagem ja foi deletada do Discord, apenas o registro do banco e removido.
 
 ---
 
@@ -617,7 +640,7 @@ Deleta uma mensagem enviada do Discord e do banco de dados.
 
 Cria um novo webhook em um canal de texto.
 
-**Autenticação:** Requerida
+**Autenticacao:** Requerida
 
 **Request Body:**
 ```json
@@ -630,7 +653,7 @@ Cria um novo webhook em um canal de texto.
 }
 ```
 
-| Campo | Tipo | Obrigatório | Descrição |
+| Campo | Tipo | Obrigatorio | Descricao |
 |-------|------|-------------|-----------|
 | channel_id | string | Sim | ID do canal de texto |
 | user_profile.name | string | Sim | Nome do webhook |
@@ -644,55 +667,68 @@ Cria um novo webhook em um canal de texto.
 ```
 
 **Erros:**
-| Status | Descrição |
+| Status | Descricao |
 |--------|-----------|
-| 400 | Payload incompleto ou canal inválido |
-| 500 | Erro ao criar webhook (falta de permissão ou URL de avatar inválida) |
+| 400 | Payload incompleto ou canal invalido |
+| 500 | Erro ao criar webhook (falta de permissao ou URL de avatar invalida) |
 
 ---
 
-## Códigos de Erro
+## Codigos de Erro
 
-### Respostas de Erro Padrão
+### Respostas de Erro Padrao
 
 ```json
 {
-  "error": "Descrição do erro"
+  "error": "Descricao do erro",
+  "code": "ERROR_CODE"
 }
 ```
 
-### Tabela de Códigos HTTP
+### Tabela de Codigos HTTP
 
-| Código | Significado |
+| Codigo | Significado |
 |--------|-------------|
 | 200 | Sucesso |
 | 201 | Recurso criado com sucesso |
-| 204 | Sucesso sem conteúdo (deleção) |
-| 400 | Requisição inválida (parâmetros faltando ou inválidos) |
-| 403 | Acesso negado (API key inválida ou ação bloqueada) |
-| 404 | Recurso não encontrado |
+| 204 | Sucesso sem conteudo (delecao) |
+| 400 | Requisicao invalida (parametros faltando ou invalidos) |
+| 403 | Acesso negado (API key invalida ou acao bloqueada) |
+| 404 | Recurso nao encontrado |
 | 500 | Erro interno do servidor |
-| 503 | Serviço indisponível (Discord desconectado) |
+| 503 | Servico indisponivel (Discord desconectado) |
+
+### Codigos de Erro (code)
+
+| Code | Descricao |
+|------|-----------|
+| CLIENT_NOT_READY | Cliente Discord nao esta pronto |
+| MISSING_FIELDS | Campos obrigatorios faltando |
+| CHANNEL_NOT_FOUND | Canal nao encontrado |
+| NOT_A_FORUM | Canal nao e um forum |
+| THREAD_NOT_FOUND | Thread nao encontrada |
+| NOT_A_THREAD | Canal nao e uma thread |
+| INTERNAL_ERROR | Erro interno do servidor |
 
 ---
 
 ## Resumo das Rotas
 
-| Método | Endpoint | Auth | Descrição |
+| Metodo | Endpoint | Auth | Descricao |
 |--------|----------|------|-----------|
-| GET | `/api/v1/health` | ❌ | Health check completo |
-| GET | `/status` | ❌ | Status simples (legado) |
-| GET | `/healthcheck` | ❌ | Health check simples (legado) |
-| GET | `/api/v1/guilds` | ✅ | Lista servidores |
-| GET | `/api/v1/guilds/:guildId/forum-channels` | ✅ | Lista canais de fórum |
-| POST | `/api/v1/forum-threads` | ✅ | Cria thread no fórum |
-| POST | `/api/v1/forum-threads/:threadId/close` | ✅ | Fecha thread |
-| POST | `/api/v1/dm` | ✅ | Envia DM |
-| GET | `/api/v1/messages/scheduled` | ✅ | Lista mensagens agendadas |
-| POST | `/api/v1/messages/scheduled` | ✅ | Cria agendamento |
-| PUT | `/api/v1/messages/scheduled/:id` | ✅ | Atualiza agendamento |
-| DELETE | `/api/v1/messages/scheduled/:id` | ✅ | Deleta agendamento |
-| POST | `/api/v1/messages/send-now` | ✅ | Envia mensagem imediata |
-| PATCH | `/api/v1/messages/sent/:id` | ✅ | Edita mensagem enviada |
-| DELETE | `/api/v1/messages/sent/:id` | ✅ | Deleta mensagem enviada |
-| POST | `/api/v1/webhooks` | ✅ | Cria webhook |
+| GET | `/api/v1/health` | Nao | Health check completo |
+| GET | `/status` | Nao | Status simples (legado) |
+| GET | `/healthcheck` | Nao | Health check simples (legado) |
+| GET | `/api/v1/guilds` | Sim | Lista servidores com todos os canais |
+| GET | `/api/v1/guilds/:guildId/forum-channels` | Sim | Lista apenas canais de forum |
+| POST | `/api/v1/forum-threads` | Sim | Cria thread no forum |
+| POST | `/api/v1/forum-threads/:threadId/close` | Sim | Fecha thread |
+| POST | `/api/v1/dm` | Sim | Envia DM |
+| GET | `/api/v1/messages/scheduled` | Sim | Lista mensagens agendadas |
+| POST | `/api/v1/messages/scheduled` | Sim | Cria agendamento |
+| PUT | `/api/v1/messages/scheduled/:id` | Sim | Atualiza agendamento |
+| DELETE | `/api/v1/messages/scheduled/:id` | Sim | Deleta agendamento |
+| POST | `/api/v1/messages/send-now` | Sim | Envia mensagem imediata |
+| PATCH | `/api/v1/messages/sent/:id` | Sim | Edita mensagem enviada |
+| DELETE | `/api/v1/messages/sent/:id` | Sim | Deleta mensagem enviada |
+| POST | `/api/v1/webhooks` | Sim | Cria webhook |

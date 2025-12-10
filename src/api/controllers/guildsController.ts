@@ -47,7 +47,7 @@ export async function listGuilds(req: Request, res: Response) {
 }
 
 /**
- * Lista todos os canais de um servidor (incluindo fóruns).
+ * Lista apenas os canais de fórum de um servidor.
  */
 export async function listForumChannels(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
@@ -66,13 +66,14 @@ export async function listForumChannels(req: Request, res: Response) {
 
     const channels = await guild.channels.fetch();
 
-    // Retorna todos os canais com seu tipo
-    const allChannels: { id: string; name: string; type: number; typeName: string }[] = [];
+    // Retorna apenas canais do tipo fórum
+    const forumChannels: { id: string; name: string; type: number; typeName: string }[] = [];
 
     channels.forEach(channel => {
       if (!channel) return;
+      if (channel.type !== ChannelType.GuildForum) return;
 
-      allChannels.push({
+      forumChannels.push({
         id: channel.id,
         name: channel.name,
         type: channel.type,
@@ -81,15 +82,15 @@ export async function listForumChannels(req: Request, res: Response) {
     });
 
     // Ordena por posição
-    allChannels.sort((a, b) => {
+    forumChannels.sort((a, b) => {
       const channelA = channels.get(a.id);
       const channelB = channels.get(b.id);
       return (channelA?.position ?? 0) - (channelB?.position ?? 0);
     });
 
-    res.status(200).json({ channels: allChannels });
+    res.status(200).json({ channels: forumChannels });
   } catch (error) {
-    console.error('Erro ao buscar canais:', error);
+    console.error('Erro ao buscar canais de fórum:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de canais.' });
   }
 }
