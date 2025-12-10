@@ -44,6 +44,11 @@ export async function createForumThread(req: Request, res: Response) {
     // Busca a mensagem inicial da thread
     const starterMessage = await thread.fetchStarterMessage();
 
+    // Suprime os embeds de links na mensagem
+    if (starterMessage) {
+      await starterMessage.suppressEmbeds(true);
+    }
+
     // Monta a URL da mensagem
     const guildId = forumChannel.guildId;
     const messageUrl = `https://discord.com/channels/${guildId}/${thread.id}/${starterMessage?.id}`;
