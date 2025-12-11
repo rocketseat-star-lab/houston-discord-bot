@@ -119,7 +119,9 @@ export async function closeForumThread(req: Request, res: Response) {
     // Envia a mensagem de fechamento se fornecida
     if (closingMessage) {
       console.log(`[closeForumThread] Enviando mensagem de fechamento`);
-      await threadChannel.send(closingMessage);
+      const sentMessage = await threadChannel.send(closingMessage);
+      // Suprime os embeds de links na mensagem
+      await sentMessage.suppressEmbeds(true);
     }
 
     // Renomeia a thread com prefixo "[FECHADA]"
