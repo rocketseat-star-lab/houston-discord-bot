@@ -72,9 +72,42 @@ export async function createForumThread(req: Request, res: Response) {
       messageId: starterMessage?.id,
       messageUrl,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[createForumThread] Erro ao criar thread:', error);
-    res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
+
+    // Retorna detalhes do erro do Discord para facilitar debug
+    const errorMessage = error?.message || 'Unknown error';
+    const discordCode = error?.code;
+
+    // Erros comuns do Discord
+    if (discordCode === 50001) {
+      return res.status(403).json({
+        error: 'Bot does not have access to this channel',
+        code: 'MISSING_ACCESS',
+        details: errorMessage
+      });
+    }
+    if (discordCode === 50013) {
+      return res.status(403).json({
+        error: 'Bot lacks required permissions',
+        code: 'MISSING_PERMISSIONS',
+        details: errorMessage
+      });
+    }
+    if (discordCode === 50035) {
+      return res.status(400).json({
+        error: 'Invalid form body (check thread name length or message content)',
+        code: 'INVALID_FORM_BODY',
+        details: errorMessage
+      });
+    }
+
+    res.status(500).json({
+      error: 'Internal server error',
+      code: 'INTERNAL_ERROR',
+      details: errorMessage,
+      discordCode: discordCode,
+    });
   }
 }
 
