@@ -5,6 +5,7 @@ import {
   createJobThread,
   closeJobThread,
   sendJobDm,
+  notifyNewJobPosting,
 } from '../controllers/jobsController';
 
 const router = Router();
@@ -23,5 +24,8 @@ router.post('/forum-threads/:threadId/close', closeJobThread);
 
 // Envia DM para um usuário
 router.post('/dm', sendJobDm);
+
+// Notifica moderação sobre nova vaga
+router.post('/notify-new', notifyNewJobPosting);
 
 export default router;

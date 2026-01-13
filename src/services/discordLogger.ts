@@ -4,6 +4,10 @@ import { Client, TextChannel, EmbedBuilder } from 'discord.js';
 const LOG_CHANNEL_ID = '1460718433133006860';
 const LOG_GUILD_ID = '327861810768117763';
 
+// Canal de notificação de novas vagas para moderação
+const MODERATION_CHANNEL_ID = '1133854714514124830';
+const MODERATION_ROLE_ID = '1356712811421634620';
+
 type LogLevel = 'info' | 'success' | 'warn' | 'error';
 
 interface LogOptions {
@@ -30,6 +34,7 @@ const LEVEL_EMOJIS: Record<LogLevel, string> = {
 class DiscordLogger {
   private client: Client | null = null;
   private channel: TextChannel | null = null;
+  private moderationChannel: TextChannel | null = null;
   private ready = false;
 
   /**
@@ -39,14 +44,22 @@ class DiscordLogger {
     this.client = client;
 
     try {
+      // Canal de logs
       const channel = await client.channels.fetch(LOG_CHANNEL_ID);
-
       if (!channel || !channel.isTextBased()) {
         console.error('[DiscordLogger] Canal de logs não encontrado ou não é um canal de texto');
-        return;
+      } else {
+        this.channel = channel as TextChannel;
       }
 
-      this.channel = channel as TextChannel;
+      // Canal de moderação
+      const modChannel = await client.channels.fetch(MODERATION_CHANNEL_ID);
+      if (!modChannel || !modChannel.isTextBased()) {
+        console.error('[DiscordLogger] Canal de moderação não encontrado ou não é um canal de texto');
+      } else {
+        this.moderationChannel = modChannel as TextChannel;
+      }
+
       this.ready = true;
       console.log('[DiscordLogger] Inicializado com sucesso');
     } catch (error) {
@@ -213,6 +226,27 @@ class DiscordLogger {
       level: 'error',
       fields,
     });
+  }
+
+  /**
+   * Notifica o time de moderação sobre uma nova vaga pendente
+   */
+  async notifyNewJobPosting(title: string, company: string, authorUsername: string): Promise<void> {
+    if (!this.moderationChannel) {
+      console.warn('[DiscordLogger] Canal de moderação não disponível');
+      return;
+    }
+
+    try {
+      const message = `<@&${MODERATION_ROLE_ID}> Nova vaga registrada e aguardando revisão:\n\n` +
+        `**${title}** na **${company}**\n` +
+        `Autor: ${authorUsername}\n\n` +
+        `[Acessar painel de moderação](https://tools.rocketseat.dev/community/jobs)`;
+
+      await this.moderationChannel.send(message);
+    } catch (error) {
+      console.error('[DiscordLogger] Erro ao notificar nova vaga:', error);
+    }
   }
 }
 

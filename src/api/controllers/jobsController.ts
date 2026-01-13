@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Client, ChannelType, ForumChannel, ThreadChannel } from 'discord.js';
+import { discordLogger } from '../../services/discordLogger';
 
 // Canal de fórum permitido para vagas
 const ALLOWED_JOBS_CHANNEL_ID = '1181004381261398188';
@@ -195,6 +196,25 @@ export async function sendJobDm(req: Request, res: Response) {
     }
   } catch (error) {
     console.error('Erro ao enviar DM:', error);
+    res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+}
+
+/**
+ * Notifica o time de moderação sobre uma nova vaga pendente.
+ */
+export async function notifyNewJobPosting(req: Request, res: Response) {
+  const { title, company, authorUsername } = req.body;
+
+  if (!title || !company || !authorUsername) {
+    return res.status(400).json({ error: 'title, company e authorUsername são obrigatórios.' });
+  }
+
+  try {
+    await discordLogger.notifyNewJobPosting(title, company, authorUsername);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Erro ao notificar nova vaga:', error);
     res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 }
