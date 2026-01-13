@@ -5,7 +5,7 @@ const LOG_CHANNEL_ID = '1460718433133006860';
 const LOG_GUILD_ID = '327861810768117763';
 
 // Canal de notificação de novas vagas para moderação
-const MODERATION_CHANNEL_ID = '1133854714514124830';
+const MODERATION_CHANNEL_ID = '1354098377733836844';
 const MODERATION_ROLE_ID = '1356712811421634620';
 
 type LogLevel = 'info' | 'success' | 'warn' | 'error';
