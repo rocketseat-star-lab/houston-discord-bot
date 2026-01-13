@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Client, ChannelType, ForumChannel, ThreadChannel } from 'discord.js';
+import { discordLogger } from '../../services/discordLogger';
 
 /**
  * Cria uma nova thread em um canal de fórum.
@@ -66,6 +67,10 @@ export async function createForumThread(req: Request, res: Response) {
     const messageUrl = `https://discord.com/channels/${forumChannel.guildId}/${thread.id}/${starterMessage?.id}`;
 
     console.log(`[createForumThread] Thread criada com sucesso: ${thread.id}`);
+
+    // Log de sucesso no Discord
+    await discordLogger.logForumThreadCreated(threadName, channelId, thread.id, messageUrl);
+
     res.status(201).json({
       success: true,
       threadId: thread.id,
@@ -78,6 +83,9 @@ export async function createForumThread(req: Request, res: Response) {
     // Retorna detalhes do erro do Discord para facilitar debug
     const errorMessage = error?.message || 'Unknown error';
     const discordCode = error?.code;
+
+    // Log de erro no Discord
+    await discordLogger.logForumThreadError(threadName, channelId, errorMessage, discordCode);
 
     // Erros comuns do Discord
     if (discordCode === 50001) {
@@ -168,12 +176,24 @@ export async function closeForumThread(req: Request, res: Response) {
     await threadChannel.setLocked(true);
 
     console.log(`[closeForumThread] Thread fechada com sucesso: ${threadId}`);
+
+    // Log de sucesso no Discord
+    await discordLogger.logForumThreadClosed(threadId, newTitle);
+
     res.status(200).json({
       success: true,
       threadId: threadChannel.id,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[closeForumThread] Erro ao fechar thread:', error);
-    res.status(500).json({ error: 'Internal server error', code: 'INTERNAL_ERROR' });
+
+    // Log de erro no Discord
+    await discordLogger.logError('closeForumThread', error);
+
+    res.status(500).json({
+      error: 'Internal server error',
+      code: 'INTERNAL_ERROR',
+      details: error?.message || 'Unknown error',
+    });
   }
 }

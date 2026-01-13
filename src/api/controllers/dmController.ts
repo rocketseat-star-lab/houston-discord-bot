@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Client } from 'discord.js';
+import { discordLogger } from '../../services/discordLogger';
 
 /**
  * Envia uma DM para um usuário.
@@ -25,16 +26,28 @@ export async function sendDm(req: Request, res: Response) {
 
     try {
       const message = await user.send(content);
+
+      // Log de sucesso no Discord
+      await discordLogger.logDmSent(userId, content, true);
+
       res.status(200).json({ success: true, messageId: message.id });
     } catch (dmError: any) {
       // Usuário tem DMs bloqueadas
       console.warn(`Não foi possível enviar DM para ${userId}:`, dmError.message);
+
+      // Log de falha no Discord
+      await discordLogger.logDmSent(userId, content, false, dmError.message);
+
       return res.status(403).json({
         error: 'Não foi possível enviar a mensagem. O usuário pode ter DMs desabilitadas.'
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao enviar DM:', error);
+
+    // Log de erro no Discord
+    await discordLogger.logError('sendDm', error);
+
     res.status(500).json({ error: 'Erro interno do servidor ao enviar a mensagem.' });
   }
 }

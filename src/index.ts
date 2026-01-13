@@ -18,6 +18,7 @@ import healthRoutes from './api/routes/health.routes';
 import forumRoutes from './api/routes/forum.routes';
 import dmRoutes from './api/routes/dm.routes';
 import { initializeScheduler } from './scheduler/messageScheduler';
+import { discordLogger } from './services/discordLogger';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
 const client = new Client({
@@ -93,16 +94,23 @@ console.log('🚀 Starting Houston Discord Bot...');
 console.log('⏳ Connecting to Discord...');
 
 client.login(process.env.DISCORD_BOT_TOKEN)
-  .then(() => {
+  .then(async () => {
     console.log('✅ 🤖 Discord bot logged in successfully!');
+
+    console.log('⏳ Initializing Discord logger...');
+    await discordLogger.initialize(client);
+    console.log('✅ 📝 Discord logger initialized!');
 
     console.log('⏳ Initializing scheduler...');
     initializeScheduler(client);
     console.log('✅ 📅 Scheduler initialized!');
 
-    app.listen(PORT, () => {
+    app.listen(PORT, async () => {
       console.log(`✅ 🌐 API Server is running on port ${PORT}`);
       console.log('🎉 Houston Discord Bot is fully operational!');
+
+      // Log de startup no Discord
+      await discordLogger.logStartup();
     });
   })
   .catch(err => {
