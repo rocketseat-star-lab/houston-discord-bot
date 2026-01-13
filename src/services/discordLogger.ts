@@ -96,8 +96,8 @@ class DiscordLogger {
    */
   async logStartup(): Promise<void> {
     await this.log({
-      title: 'Bot Iniciado',
-      description: 'Houston Discord Bot foi reiniciado e está operacional.',
+      title: 'Bot iniciado',
+      description: 'Houston foi reiniciado e está operacional.',
       level: 'success',
       fields: [
         { name: 'Ambiente', value: process.env.NODE_ENV || 'development', inline: true },
@@ -112,7 +112,7 @@ class DiscordLogger {
   async logDmSent(userId: string, preview: string, success: boolean, error?: string): Promise<void> {
     if (success) {
       await this.log({
-        title: 'DM Enviada',
+        title: 'DM enviada',
         level: 'success',
         fields: [
           { name: 'Usuário', value: `<@${userId}>`, inline: true },
@@ -121,7 +121,7 @@ class DiscordLogger {
       });
     } else {
       await this.log({
-        title: 'Falha ao Enviar DM',
+        title: 'Falha ao enviar DM',
         level: 'error',
         fields: [
           { name: 'Usuário', value: `<@${userId}>`, inline: true },
@@ -141,7 +141,7 @@ class DiscordLogger {
     messageUrl: string
   ): Promise<void> {
     await this.log({
-      title: 'Thread de Vaga Criada',
+      title: 'Thread de vaga criada',
       level: 'success',
       fields: [
         { name: 'Título', value: threadName, inline: false },
@@ -172,7 +172,7 @@ class DiscordLogger {
     }
 
     await this.log({
-      title: 'Erro ao Criar Thread de Vaga',
+      title: 'Erro ao criar thread de vaga',
       level: 'error',
       fields,
     });
@@ -183,7 +183,7 @@ class DiscordLogger {
    */
   async logForumThreadClosed(threadId: string, title: string): Promise<void> {
     await this.log({
-      title: 'Thread de Vaga Fechada',
+      title: 'Thread de vaga fechada',
       level: 'info',
       fields: [
         { name: 'Thread', value: `<#${threadId}>`, inline: true },
@@ -209,7 +209,7 @@ class DiscordLogger {
     }
 
     await this.log({
-      title: 'Erro no Bot',
+      title: 'Erro no bot',
       level: 'error',
       fields,
     });
