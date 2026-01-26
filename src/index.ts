@@ -18,8 +18,10 @@ import healthRoutes from './api/routes/health.routes';
 import forumRoutes from './api/routes/forum.routes';
 import dmRoutes from './api/routes/dm.routes';
 import jobsRoutes from './api/routes/jobs.routes';
+import moderationRoutes from './api/routes/moderation.routes';
 import { initializeScheduler } from './scheduler/messageScheduler';
 import { discordLogger } from './services/discordLogger';
+import { moderationRuleCache } from './services/moderationRuleCache';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
 const client = new Client({
@@ -90,6 +92,7 @@ app.use('/api/v1/webhooks', apiKeyAuth, webhooksRoutes);
 app.use('/api/v1/forum-threads', apiKeyAuth, forumRoutes);
 app.use('/api/v1/dm', apiKeyAuth, dmRoutes);
 app.use('/api/v1/jobs', apiKeyAuth, jobsRoutes);
+app.use('/api/v1/moderation', apiKeyAuth, moderationRoutes);
 
 // --- INICIALIZAÇÃO GERAL ---
 console.log('🚀 Starting Houston Discord Bot...');
@@ -102,6 +105,13 @@ client.login(process.env.DISCORD_BOT_TOKEN)
     console.log('⏳ Initializing Discord logger...');
     await discordLogger.initialize(client);
     console.log('✅ 📝 Discord logger initialized!');
+
+    console.log('⏳ Waiting for backend to be ready...');
+    await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds for backend
+
+    console.log('⏳ Loading moderation rules from backend...');
+    await moderationRuleCache.fetchAndLoadRules(5, 3000); // 5 retries, 3 second delay
+    console.log('✅ 🛡️ Moderation rules loading completed!');
 
     console.log('⏳ Initializing scheduler...');
     initializeScheduler(client);
