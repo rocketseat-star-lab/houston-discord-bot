@@ -283,7 +283,7 @@ export class ModerationService {
 
         case 'SEND_WARNING_MESSAGE':
           const warningMessage = actionConfig.message || 'Atenção: mensagem removida por violar regras.';
-          if (message.channel.isTextBased()) {
+          if ('send' in message.channel) {
             await message.channel.send(`${message.author}, ${warningMessage}`);
             return { success: true };
           }
