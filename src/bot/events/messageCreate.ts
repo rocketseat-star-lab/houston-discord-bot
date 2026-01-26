@@ -1,5 +1,6 @@
 import { Message, TextChannel } from 'discord.js';
 import { getAiResponse } from '../../services/aiService';
+import { moderationService } from '../../services/moderationService';
 import 'dotenv/config';
 
 export default {
@@ -12,8 +13,16 @@ export default {
     // suporta 'sendTyping' antes de prosseguir.
     if (!(message.channel instanceof TextChannel) || !message.guild) return;
 
-    // 2. Ignora mensagens de outros bots para evitar loops.
-    if (message.author.bot) return;
+    // 2. Ignora mensagens de outros bots e mensagens do sistema para evitar loops.
+    if (message.author.bot || message.system) return;
+
+    // ---- Auto-Moderação ----
+    // Avalia a mensagem contra regras de moderação ANTES de processar AI
+    try {
+      await moderationService.evaluateMessage(message);
+    } catch (error) {
+      console.error('[messageCreate] Error in moderation evaluation:', error);
+    }
 
     // 3. Verifica se o bot foi mencionado e se está no servidor configurado.
     const wasMentioned = message.mentions.has(message.client.user.id);
