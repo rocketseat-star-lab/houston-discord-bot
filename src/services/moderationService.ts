@@ -15,7 +15,8 @@ export class ModerationService {
   private readonly MAX_ERRORS = 20;
 
   constructor() {
-    this.backendApiUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
+    // TODO: Remover hardcoded URL quando variável de ambiente for configurada em produção
+    this.backendApiUrl = process.env.BACKEND_API_URL || 'http://34.238.247.130:3000';
     this.backendApiKey = process.env.INTERNAL_API_KEY || '';
   }
 
