@@ -85,3 +85,107 @@ export const getDebugInfo = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * Revoga um timeout no Discord
+ */
+export const revokeTimeout = async (req: Request, res: Response) => {
+  try {
+    const { guildId, userId } = req.params;
+
+    if (!guildId || !userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Guild ID and User ID are required',
+      });
+    }
+
+    const client = req.app.get('discordClient');
+    if (!client) {
+      return res.status(500).json({
+        success: false,
+        error: 'Discord client not available',
+      });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    if (!guild) {
+      return res.status(404).json({
+        success: false,
+        error: 'Guild not found',
+      });
+    }
+
+    const member = await guild.members.fetch(userId);
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        error: 'Member not found',
+      });
+    }
+
+    // Remove timeout (passa null para remover)
+    await member.timeout(null, 'Timeout revogado via dashboard');
+
+    console.log(`[ModerationController] Timeout revogado: ${userId} no servidor ${guildId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Timeout revogado com sucesso',
+    });
+  } catch (error) {
+    console.error('[ModerationController] Error revoking timeout:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to revoke timeout',
+    });
+  }
+};
+
+/**
+ * Revoga um ban no Discord
+ */
+export const revokeBan = async (req: Request, res: Response) => {
+  try {
+    const { guildId, userId } = req.params;
+
+    if (!guildId || !userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Guild ID and User ID are required',
+      });
+    }
+
+    const client = req.app.get('discordClient');
+    if (!client) {
+      return res.status(500).json({
+        success: false,
+        error: 'Discord client not available',
+      });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    if (!guild) {
+      return res.status(404).json({
+        success: false,
+        error: 'Guild not found',
+      });
+    }
+
+    // Remove o ban
+    await guild.members.unban(userId, 'Ban revogado via dashboard');
+
+    console.log(`[ModerationController] Ban revogado: ${userId} no servidor ${guildId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Ban revogado com sucesso',
+    });
+  } catch (error) {
+    console.error('[ModerationController] Error revoking ban:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to revoke ban',
+    });
+  }
+};
