@@ -16,7 +16,7 @@ export class ModerationService {
 
   constructor() {
     // TODO: Remover hardcoded URL quando variável de ambiente for configurada em produção
-    this.backendApiUrl = process.env.BACKEND_API_URL || 'http://34.238.247.130:3000';
+    this.backendApiUrl = process.env.BACKEND_API_URL || 'https://rocketseat-tools-backend.vercel.app';
     this.backendApiKey = process.env.INTERNAL_API_KEY || '';
   }
 
