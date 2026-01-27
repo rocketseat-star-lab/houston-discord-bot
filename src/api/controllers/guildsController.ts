@@ -94,3 +94,80 @@ export async function listForumChannels(req: Request, res: Response) {
     res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de canais.' });
   }
 }
+
+/**
+ * Lista todas as roles de um servidor
+ */
+export async function listGuildRoles(req: Request, res: Response) {
+  const discordClient = req.app.get('discordClient') as Client;
+  const { guildId } = req.params;
+
+  if (!discordClient || !discordClient.isReady()) {
+    return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
+  }
+
+  try {
+    const guild = discordClient.guilds.cache.get(guildId);
+
+    if (!guild) {
+      return res.status(404).json({ error: 'Servidor não encontrado.' });
+    }
+
+    const roles = await guild.roles.fetch();
+
+    const rolesList = roles
+      .filter(role => role !== null && role.name !== '@everyone')
+      .map(role => ({
+        id: role!.id,
+        name: role!.name,
+        color: role!.hexColor,
+        position: role!.position,
+        managed: role!.managed,
+      }))
+      .sort((a, b) => b.position - a.position);
+
+    res.status(200).json({ roles: rolesList });
+  } catch (error) {
+    console.error('Erro ao buscar roles:', error);
+    res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de roles.' });
+  }
+}
+
+/**
+ * Lista todos os canais de um servidor (text, voice, announcement, etc.)
+ */
+export async function listGuildChannels(req: Request, res: Response) {
+  const discordClient = req.app.get('discordClient') as Client;
+  const { guildId } = req.params;
+
+  if (!discordClient || !discordClient.isReady()) {
+    return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
+  }
+
+  try {
+    const guild = discordClient.guilds.cache.get(guildId);
+
+    if (!guild) {
+      return res.status(404).json({ error: 'Servidor não encontrado.' });
+    }
+
+    const channels = await guild.channels.fetch();
+
+    const channelsList = channels
+      .filter(channel => channel !== null)
+      .map(channel => ({
+        id: channel!.id,
+        name: channel!.name,
+        type: channel!.type,
+        typeName: ChannelType[channel!.type],
+        position: channel!.position,
+        parentId: channel!.parentId,
+      }))
+      .sort((a, b) => a.position - b.position);
+
+    res.status(200).json({ channels: channelsList });
+  } catch (error) {
+    console.error('Erro ao buscar canais:', error);
+    res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de canais.' });
+  }
+}
