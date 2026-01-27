@@ -1,6 +1,15 @@
-import { Message, GuildMember } from 'discord.js';
+import { Message, GuildMember, EmbedBuilder, TextChannel } from 'discord.js';
 import { moderationRuleCache, CachedRule } from './moderationRuleCache';
 import axios from 'axios';
+
+/**
+ * Interface para rastrear mensagens recentes por usuário
+ */
+interface UserMessage {
+  content: string;
+  timestamp: number;
+  messageId: string;
+}
 
 /**
  * Serviço principal de moderação
@@ -13,6 +22,9 @@ export class ModerationService {
   private reportSuccessCount = 0;
   private reportFailureCount = 0;
   private readonly MAX_ERRORS = 20;
+
+  // Cache de mensagens recentes para detecção de spam
+  private userMessagesCache: Map<string, UserMessage[]> = new Map();
 
   constructor() {
     // TODO: Remover hardcoded URL quando variável de ambiente for configurada em produção
@@ -153,12 +165,59 @@ export class ModerationService {
   }
 
   /**
-   * Avalia trigger de spam (placeholder - implementação básica)
+   * Avalia trigger de spam
+   * Detecta quando um usuário envia muitas mensagens em um curto período
    */
   private async evaluateSpamTrigger(message: Message, config: Record<string, any>): Promise<boolean> {
-    // TODO: Implementar detecção de spam com histórico de mensagens
-    // Por enquanto, retorna false
-    return false;
+    const timeWindow = (config.timeWindow || 5) * 1000; // Converte para milissegundos
+    const minMessages = config.minMessages || 5;
+    const userId = message.author.id;
+    const now = Date.now();
+
+    // Obtém ou inicializa cache de mensagens do usuário
+    if (!this.userMessagesCache.has(userId)) {
+      this.userMessagesCache.set(userId, []);
+    }
+
+    const userMessages = this.userMessagesCache.get(userId)!;
+
+    // Remove mensagens antigas (fora da janela de tempo)
+    const recentMessages = userMessages.filter(msg => now - msg.timestamp <= timeWindow);
+
+    // Adiciona a mensagem atual
+    recentMessages.push({
+      content: message.content,
+      timestamp: now,
+      messageId: message.id,
+    });
+
+    // Atualiza o cache
+    this.userMessagesCache.set(userId, recentMessages);
+
+    // Limpa o cache periodicamente (remove usuários inativos)
+    if (Math.random() < 0.01) { // 1% de chance
+      this.cleanupMessageCache();
+    }
+
+    // Verifica se ultrapassou o limite
+    return recentMessages.length >= minMessages;
+  }
+
+  /**
+   * Limpa mensagens antigas do cache
+   */
+  private cleanupMessageCache(): void {
+    const now = Date.now();
+    const maxAge = 60000; // 1 minuto
+
+    for (const [userId, messages] of this.userMessagesCache.entries()) {
+      const recentMessages = messages.filter(msg => now - msg.timestamp <= maxAge);
+      if (recentMessages.length === 0) {
+        this.userMessagesCache.delete(userId);
+      } else {
+        this.userMessagesCache.set(userId, recentMessages);
+      }
+    }
   }
 
   /**
@@ -223,8 +282,11 @@ export class ModerationService {
   private async executeActions(message: Message, rule: CachedRule): Promise<void> {
     const results = [];
 
-    // Ordena ações por ordem
-    const sortedActions = [...rule.actions].sort((a, b) => a.order - b.order);
+    // Ordena ações por ordem configurada
+    let sortedActions = [...rule.actions].sort((a, b) => a.order - b.order);
+
+    // Ordenação automática: garante que mensagens sejam enviadas antes de ações destrutivas
+    sortedActions = this.reorderActionsForSafety(sortedActions);
 
     for (const action of sortedActions) {
       try {
@@ -252,6 +314,26 @@ export class ModerationService {
   }
 
   /**
+   * Reordena ações para garantir segurança na execução
+   * Garante que DMs sejam enviadas antes de BAN/KICK (que removem o usuário do servidor)
+   */
+  private reorderActionsForSafety(actions: any[]): any[] {
+    const messagingActions = ['SEND_DM', 'SEND_LOG_MESSAGE'];
+    const destructiveActions = ['BAN', 'KICK'];
+
+    // Separa as ações em grupos
+    const messaging = actions.filter(a => messagingActions.includes(a.actionType));
+    const destructive = actions.filter(a => destructiveActions.includes(a.actionType));
+    const other = actions.filter(a =>
+      !messagingActions.includes(a.actionType) &&
+      !destructiveActions.includes(a.actionType)
+    );
+
+    // Retorna na ordem: messaging → other → destructive
+    return [...messaging, ...other, ...destructive];
+  }
+
+  /**
    * Executa uma ação específica
    */
   private async executeAction(
@@ -270,6 +352,16 @@ export class ModerationService {
             const durationInSeconds = actionConfig.duration || 300; // 5 minutos padrão em segundos
             const durationInMs = durationInSeconds * 1000; // Converte para milissegundos
             const reason = actionConfig.reason || 'Violação de regra de moderação';
+
+            // Envia DM antes de aplicar timeout, se configurado
+            if (actionConfig.dmMessage) {
+              try {
+                await message.author.send(actionConfig.dmMessage);
+              } catch (error) {
+                console.warn('[ModerationService] Could not send DM before timeout (user may have DMs disabled)');
+              }
+            }
+
             await message.member.timeout(durationInMs, reason);
             return { success: true };
           }
@@ -278,6 +370,16 @@ export class ModerationService {
         case 'BAN':
           if (message.member) {
             const reason = actionConfig.reason || 'Violação de regra de moderação';
+
+            // Envia DM antes de banir, se configurado
+            if (actionConfig.dmMessage) {
+              try {
+                await message.author.send(actionConfig.dmMessage);
+              } catch (error) {
+                console.warn('[ModerationService] Could not send DM before ban (user may have DMs disabled)');
+              }
+            }
+
             await message.member.ban({ reason });
             return { success: true };
           }
@@ -300,13 +402,58 @@ export class ModerationService {
             return { success: false, error: 'Could not send DM (user may have DMs disabled)' };
           }
 
-        case 'SEND_WARNING_MESSAGE':
-          const warningMessage = actionConfig.message || 'Atenção: mensagem removida por violar regras.';
-          if ('send' in message.channel) {
-            await message.channel.send(`${message.author}, ${warningMessage}`);
+        case 'SEND_LOG_MESSAGE':
+          try {
+            if (!actionConfig.channelId) {
+              return { success: false, error: 'Channel ID not configured' };
+            }
+
+            const logChannel = await message.guild?.channels.fetch(actionConfig.channelId);
+
+            if (!logChannel || !(logChannel instanceof TextChannel)) {
+              return { success: false, error: 'Log channel not found or not a text channel' };
+            }
+
+            // Cria embed com informações da violação
+            const embed = new EmbedBuilder()
+              .setColor(0xFF0000) // Vermelho
+              .setTitle('🚨 Regra de Moderação Acionada')
+              .setDescription(`Usuário violou uma regra de moderação automática`)
+              .addFields(
+                { name: 'Usuário', value: `${message.author.tag} (${message.author.id})`, inline: true },
+                { name: 'Canal', value: `<#${message.channel.id}>`, inline: true },
+                { name: 'Timestamp', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+              )
+              .setTimestamp();
+
+            // Adiciona conteúdo da mensagem se existir
+            if (message.content) {
+              embed.addFields({
+                name: 'Mensagem',
+                value: message.content.length > 1024
+                  ? message.content.substring(0, 1021) + '...'
+                  : message.content,
+              });
+            }
+
+            // Adiciona anexos se existirem
+            if (message.attachments.size > 0) {
+              embed.addFields({
+                name: 'Anexos',
+                value: Array.from(message.attachments.values())
+                  .map(att => `[${att.name}](${att.url})`)
+                  .join('\n'),
+              });
+            }
+
+            await logChannel.send({ embeds: [embed] });
             return { success: true };
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to send log message',
+            };
           }
-          return { success: false, error: 'Channel does not support text messages' };
 
         case 'ADD_ROLE':
           if (message.member && actionConfig.roleId) {
