@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { syncRules, getCacheStatus } from '../controllers/moderationController';
+import { syncRules, getCacheStatus, getDebugInfo } from '../controllers/moderationController';
 import { apiKeyAuth } from '../middlewares/apiKeyAuth';
 
 const router = Router();
@@ -15,5 +15,11 @@ router.post('/rules/sync', apiKeyAuth, syncRules);
  * Retorna informações sobre o cache de regras
  */
 router.get('/status', apiKeyAuth, getCacheStatus);
+
+/**
+ * GET /api/v1/moderation/debug
+ * Retorna informações de debug sobre comunicação com o backend
+ */
+router.get('/debug', apiKeyAuth, getDebugInfo);
 
 export default router;
