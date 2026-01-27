@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { moderationRuleCache } from '../../services/moderationRuleCache';
+import { moderationService } from '../../services/moderationService';
 
 /**
  * Sincroniza regras de moderação recebidas do backend
@@ -61,6 +62,26 @@ export const getCacheStatus = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to get cache status',
+    });
+  }
+};
+
+/**
+ * Retorna informações de debug sobre comunicação com o backend
+ */
+export const getDebugInfo = async (req: Request, res: Response) => {
+  try {
+    const debugInfo = moderationService.getDebugInfo();
+
+    return res.status(200).json({
+      success: true,
+      ...debugInfo,
+    });
+  } catch (error) {
+    console.error('[ModerationController] Error getting debug info:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to get debug info',
     });
   }
 };

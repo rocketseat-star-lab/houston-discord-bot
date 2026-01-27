@@ -9,10 +9,28 @@ import axios from 'axios';
 export class ModerationService {
   private backendApiUrl: string;
   private backendApiKey: string;
+  private reportErrors: Array<{ timestamp: string; error: string; details: any }> = [];
+  private reportSuccessCount = 0;
+  private reportFailureCount = 0;
+  private readonly MAX_ERRORS = 20;
 
   constructor() {
     this.backendApiUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
     this.backendApiKey = process.env.INTERNAL_API_KEY || '';
+  }
+
+  /**
+   * Retorna estatísticas de comunicação com o backend
+   */
+  getDebugInfo() {
+    return {
+      backendApiUrl: this.backendApiUrl,
+      hasApiKey: !!this.backendApiKey,
+      apiKeyLength: this.backendApiKey.length,
+      reportSuccessCount: this.reportSuccessCount,
+      reportFailureCount: this.reportFailureCount,
+      lastErrors: this.reportErrors,
+    };
   }
 
   /**
@@ -363,14 +381,29 @@ export class ModerationService {
         }
       );
 
+      this.reportSuccessCount++;
       console.log(`[ModerationService] Reported rule execution to backend: ${rule.id}`);
     } catch (error: any) {
-      console.error('[ModerationService] Failed to report to backend:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        url: `${this.backendApiUrl}/api/moderation/internal/logs`,
-      });
+      this.reportFailureCount++;
+
+      const errorDetails = {
+        timestamp: new Date().toISOString(),
+        error: error.message,
+        details: {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          responseData: error.response?.data,
+          url: `${this.backendApiUrl}/api/moderation/internal/logs`,
+        },
+      };
+
+      // Adiciona erro à lista (máximo 20)
+      this.reportErrors.unshift(errorDetails);
+      if (this.reportErrors.length > this.MAX_ERRORS) {
+        this.reportErrors.pop();
+      }
+
+      console.error('[ModerationService] Failed to report to backend:', errorDetails);
     }
   }
 }
