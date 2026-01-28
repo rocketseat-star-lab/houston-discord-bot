@@ -152,6 +152,8 @@ export async function listGuildRoles(req: Request, res: Response) {
     // Adicionar roles especiais no início
     const allRoles = [...specialRoles, ...rolesList];
 
+    console.log(`[listGuildRoles] Guild ${guildId}: returning ${allRoles.length} roles (${rolesList.length} regular + 2 special)`);
+
     res.status(200).json({ roles: allRoles });
   } catch (error) {
     console.error('Erro ao buscar roles:', error);
