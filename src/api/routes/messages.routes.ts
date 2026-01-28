@@ -7,6 +7,7 @@ import {
   sendImmediateMessage,
   editSentMessage,
   deleteSentMessage,
+  listSentMessages,
 } from '../controllers/messageController';
 
 const router = Router();
@@ -21,6 +22,9 @@ router.put('/scheduled/:id', updateScheduledMessage);
 router.delete('/scheduled/:id', deleteScheduledMessage);
 
 // --- Rotas para Mensagens JÁ ENVIADAS ---
+
+// Lista todas as mensagens já enviadas (para cleanup de imagens)
+router.get('/sent', listSentMessages);
 
 // Edita o conteúdo de uma mensagem já enviada ao Discord
 router.patch('/sent/:id', editSentMessage);

@@ -23,6 +23,7 @@ model ScheduledMessage {
   title          String?
   messageUrl     String?       @map("message_url")
   imageUrl       String?       @map("image_url")
+  reactions      String[]      @default([])
 
   @@map("houston_bot_scheduled_messages")
 }
