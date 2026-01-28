@@ -115,6 +115,26 @@ export async function listGuildRoles(req: Request, res: Response) {
 
     const roles = await guild.roles.fetch();
 
+    // Roles especiais do Discord (não são roles reais, mas menções especiais)
+    const specialRoles = [
+      {
+        id: 'everyone',
+        name: 'everyone',
+        color: '#99AAB5',
+        position: -1,
+        managed: false,
+        special: true
+      },
+      {
+        id: 'here',
+        name: 'here',
+        color: '#99AAB5',
+        position: -2,
+        managed: false,
+        special: true
+      }
+    ];
+
     const rolesList = roles
       .filter(role => role !== null && role.name !== '@everyone')
       .map(role => ({
@@ -123,10 +143,14 @@ export async function listGuildRoles(req: Request, res: Response) {
         color: role!.hexColor,
         position: role!.position,
         managed: role!.managed,
+        special: false
       }))
       .sort((a, b) => b.position - a.position);
 
-    res.status(200).json({ roles: rolesList });
+    // Adicionar roles especiais no início
+    const allRoles = [...specialRoles, ...rolesList];
+
+    res.status(200).json({ roles: allRoles });
   } catch (error) {
     console.error('Erro ao buscar roles:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de roles.' });
@@ -169,5 +193,112 @@ export async function listGuildChannels(req: Request, res: Response) {
   } catch (error) {
     console.error('Erro ao buscar canais:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de canais.' });
+  }
+}
+
+/**
+ * Lista todos os emojis disponíveis em um servidor
+ */
+export async function listGuildEmojis(req: Request, res: Response) {
+  const discordClient = req.app.get('discordClient') as Client;
+  const { guildId } = req.params;
+
+  if (!discordClient || !discordClient.isReady()) {
+    return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
+  }
+
+  try {
+    const guild = discordClient.guilds.cache.get(guildId);
+
+    if (!guild) {
+      return res.status(404).json({ error: 'Servidor não encontrado.' });
+    }
+
+    // Buscar todos os emojis customizados do servidor
+    const emojis = await guild.emojis.fetch();
+
+    const customEmojisList = emojis
+      .filter(emoji => emoji !== null)
+      .map(emoji => ({
+        id: emoji!.id,
+        name: emoji!.name,
+        animated: emoji!.animated,
+        identifier: emoji!.animated ? `<a:${emoji!.name}:${emoji!.id}>` : `<:${emoji!.name}:${emoji!.id}>`,
+        url: emoji!.url,
+        custom: true
+      }))
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    // Emojis Unicode padrão mais usados
+    const unicodeEmojis = [
+      // Mais usados (prioridade)
+      { id: 'unicode_purple_heart', name: 'purple_heart', animated: false, identifier: '💜', url: null, custom: false },
+      { id: 'unicode_rocket', name: 'rocket', animated: false, identifier: '🚀', url: null, custom: false },
+      { id: 'unicode_fire', name: 'fire', animated: false, identifier: '🔥', url: null, custom: false },
+
+      // Reações básicas
+      { id: 'unicode_thumbsup', name: 'thumbsup', animated: false, identifier: '👍', url: null, custom: false },
+      { id: 'unicode_thumbsdown', name: 'thumbsdown', animated: false, identifier: '👎', url: null, custom: false },
+      { id: 'unicode_clap', name: 'clap', animated: false, identifier: '👏', url: null, custom: false },
+      { id: 'unicode_raised_hands', name: 'raised_hands', animated: false, identifier: '🙌', url: null, custom: false },
+      { id: 'unicode_pray', name: 'pray', animated: false, identifier: '🙏', url: null, custom: false },
+      { id: 'unicode_ok_hand', name: 'ok_hand', animated: false, identifier: '👌', url: null, custom: false },
+      { id: 'unicode_wave', name: 'wave', animated: false, identifier: '👋', url: null, custom: false },
+
+      // Corações
+      { id: 'unicode_heart', name: 'heart', animated: false, identifier: '❤️', url: null, custom: false },
+      { id: 'unicode_blue_heart', name: 'blue_heart', animated: false, identifier: '💙', url: null, custom: false },
+      { id: 'unicode_green_heart', name: 'green_heart', animated: false, identifier: '💚', url: null, custom: false },
+      { id: 'unicode_yellow_heart', name: 'yellow_heart', animated: false, identifier: '💛', url: null, custom: false },
+      { id: 'unicode_orange_heart', name: 'orange_heart', animated: false, identifier: '🧡', url: null, custom: false },
+
+      // Símbolos e objetos
+      { id: 'unicode_dart', name: 'dart', animated: false, identifier: '🎯', url: null, custom: false },
+      { id: 'unicode_pushpin', name: 'pushpin', animated: false, identifier: '📌', url: null, custom: false },
+      { id: 'unicode_tada', name: 'tada', animated: false, identifier: '🎉', url: null, custom: false },
+      { id: 'unicode_star', name: 'star', animated: false, identifier: '⭐', url: null, custom: false },
+      { id: 'unicode_sparkles', name: 'sparkles', animated: false, identifier: '✨', url: null, custom: false },
+      { id: 'unicode_zap', name: 'zap', animated: false, identifier: '⚡', url: null, custom: false },
+      { id: 'unicode_boom', name: 'boom', animated: false, identifier: '💥', url: null, custom: false },
+
+      // Rostos
+      { id: 'unicode_smile', name: 'smile', animated: false, identifier: '😊', url: null, custom: false },
+      { id: 'unicode_laughing', name: 'laughing', animated: false, identifier: '😆', url: null, custom: false },
+      { id: 'unicode_joy', name: 'joy', animated: false, identifier: '😂', url: null, custom: false },
+      { id: 'unicode_rofl', name: 'rofl', animated: false, identifier: '🤣', url: null, custom: false },
+      { id: 'unicode_heart_eyes', name: 'heart_eyes', animated: false, identifier: '😍', url: null, custom: false },
+      { id: 'unicode_thinking', name: 'thinking', animated: false, identifier: '🤔', url: null, custom: false },
+      { id: 'unicode_eyes', name: 'eyes', animated: false, identifier: '👀', url: null, custom: false },
+      { id: 'unicode_cry', name: 'cry', animated: false, identifier: '😢', url: null, custom: false },
+      { id: 'unicode_sob', name: 'sob', animated: false, identifier: '😭', url: null, custom: false },
+      { id: 'unicode_rage', name: 'rage', animated: false, identifier: '😡', url: null, custom: false },
+      { id: 'unicode_scream', name: 'scream', animated: false, identifier: '😱', url: null, custom: false },
+      { id: 'unicode_pleading', name: 'pleading', animated: false, identifier: '🥺', url: null, custom: false },
+
+      // Status e validação
+      { id: 'unicode_check', name: 'check', animated: false, identifier: '✅', url: null, custom: false },
+      { id: 'unicode_x', name: 'x', animated: false, identifier: '❌', url: null, custom: false },
+      { id: 'unicode_warning', name: 'warning', animated: false, identifier: '⚠️', url: null, custom: false },
+      { id: 'unicode_question', name: 'question', animated: false, identifier: '❓', url: null, custom: false },
+      { id: 'unicode_exclamation', name: 'exclamation', animated: false, identifier: '❗', url: null, custom: false },
+
+      // Outros
+      { id: 'unicode_100', name: '100', animated: false, identifier: '💯', url: null, custom: false },
+      { id: 'unicode_muscle', name: 'muscle', animated: false, identifier: '💪', url: null, custom: false },
+      { id: 'unicode_brain', name: 'brain', animated: false, identifier: '🧠', url: null, custom: false },
+      { id: 'unicode_trophy', name: 'trophy', animated: false, identifier: '🏆', url: null, custom: false },
+      { id: 'unicode_medal', name: 'medal', animated: false, identifier: '🏅', url: null, custom: false },
+    ];
+
+    // Combinar emojis Unicode primeiro, depois os custom do servidor
+    const allEmojis = [...unicodeEmojis, ...customEmojisList];
+
+    res.status(200).json({
+      emojis: allEmojis,
+      total: allEmojis.length
+    });
+  } catch (error) {
+    console.error('Erro ao buscar emojis:', error);
+    res.status(500).json({ error: 'Erro interno do servidor ao processar a lista de emojis.' });
   }
 }

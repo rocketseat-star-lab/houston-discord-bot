@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../../services/prisma';
-import { Client, TextChannel, EmbedBuilder } from 'discord.js';
+import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
 import { MessageStatus, Prisma } from '@prisma/client';
 
 // Interfaces atualizadas
@@ -10,6 +10,7 @@ interface ScheduleMessageBody {
   scheduleTime: string;
   title?: string;
   imageUrl?: string;
+  reactions?: string[];
 }
 
 interface UpdateScheduleBody {
@@ -18,6 +19,7 @@ interface UpdateScheduleBody {
     scheduleTime?: string;
     title?: string;
     imageUrl?: string;
+    reactions?: string[];
 }
 
 interface SendNowBody {
@@ -25,18 +27,20 @@ interface SendNowBody {
     messageContent: string;
     title?: string;
     imageUrl?: string;
+    reactions?: string[];
 }
 
 interface EditSentMessageBody {
     messageContent?: string;
     title?: string;
     imageUrl?: string;
+    reactions?: string[];
 }
 
 // --- CRUD para Mensagens Agendadas ---
 
 export async function createScheduledMessage(req: Request<{}, {}, ScheduleMessageBody>, res: Response) {
-  const { channelId, messageContent, scheduleTime, title, imageUrl } = req.body;
+  const { channelId, messageContent, scheduleTime, title, imageUrl, reactions } = req.body;
   const discordClient = req.app.get('discordClient') as Client;
 
   if (!channelId || !messageContent || !scheduleTime) {
@@ -59,7 +63,7 @@ export async function createScheduledMessage(req: Request<{}, {}, ScheduleMessag
     const guildId = channel.guildId;
 
     const result = await prisma.scheduledMessage.create({
-        data: { guildId, channelId, messageContent, scheduleTime: scheduleDate, title, imageUrl }
+        data: { guildId, channelId, messageContent, scheduleTime: scheduleDate, title, imageUrl, reactions: reactions || [] }
     });
     res.status(201).json(result);
   } catch (error) {
@@ -108,7 +112,7 @@ export async function updateScheduledMessage(req: Request<{ id: string }, {}, Up
     const messageId = parseInt(req.params.id, 10);
     if (isNaN(messageId)) return res.status(400).json({ error: 'ID da mensagem inválido.' });
 
-    const { channelId, messageContent, scheduleTime, title, imageUrl } = req.body;
+    const { channelId, messageContent, scheduleTime, title, imageUrl, reactions } = req.body;
 
     // --- LÓGICA ATUALIZADA AQUI ---
     const dataToUpdate: Prisma.ScheduledMessageUpdateInput = {};
@@ -120,6 +124,7 @@ export async function updateScheduledMessage(req: Request<{ id: string }, {}, Up
     if (channelId) dataToUpdate.channelId = channelId;
     if (messageContent) dataToUpdate.messageContent = messageContent;
     if (imageUrl !== undefined) dataToUpdate.imageUrl = imageUrl;
+    if (reactions !== undefined) dataToUpdate.reactions = reactions;
     if (scheduleTime) {
         const newScheduleDate = new Date(scheduleTime);
         if (isNaN(newScheduleDate.getTime()) || newScheduleDate < new Date()) {
@@ -166,7 +171,7 @@ export async function deleteScheduledMessage(req: Request<{ id: string }>, res: 
 // --- Ações Imediatas e Pós-Envio ---
 
 export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, res: Response) {
-    const { channelId, messageContent, title, imageUrl } = req.body;
+    const { channelId, messageContent, title, imageUrl, reactions } = req.body;
     const discordClient = req.app.get('discordClient') as Client;
 
     if (!channelId || !messageContent) return res.status(400).json({ error: 'Dados ausentes.' });
@@ -177,16 +182,32 @@ export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, re
         if (!(channel instanceof TextChannel)) return res.status(404).json({ error: 'Canal não encontrado ou não é um canal de texto.' });
 
         // Preparar opções de envio
-        const options: any = { content: messageContent };
+        const options: any = {
+            content: messageContent,
+            allowedMentions: {
+                parse: ['everyone', 'roles', 'users'],
+            }
+        };
 
-        // Adicionar embed com imagem se imageUrl for fornecida
+        // Adicionar imagem como attachment se imageUrl for fornecida
         if (imageUrl) {
-            const embed = new EmbedBuilder().setImage(imageUrl);
-            options.embeds = [embed];
+            const attachment = new AttachmentBuilder(imageUrl);
+            options.files = [attachment];
         }
 
         const sentMessage = await channel.send(options);
         const guildId = channel.guildId;
+
+        // Adicionar reações se fornecidas
+        if (reactions && reactions.length > 0) {
+            for (const reaction of reactions) {
+                try {
+                    await sentMessage.react(reaction);
+                } catch (error) {
+                    console.error(`Erro ao adicionar reação ${reaction}:`, error);
+                }
+            }
+        }
 
         const dbRecord = await prisma.scheduledMessage.create({
             data: {
@@ -195,6 +216,7 @@ export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, re
                 messageContent,
                 title,
                 imageUrl,
+                reactions: reactions || [],
                 scheduleTime: new Date(),
                 status: 'SENT',
                 messageUrl: sentMessage.url
@@ -212,7 +234,7 @@ export async function editSentMessage(req: Request<{ id: string }, {}, EditSentM
     const messageId = parseInt(req.params.id, 10);
     if (isNaN(messageId)) return res.status(400).json({ error: 'ID da mensagem inválido.' });
 
-    const { messageContent, title, imageUrl } = req.body;
+    const { messageContent, title, imageUrl, reactions } = req.body;
     const discordClient = req.app.get('discordClient') as Client;
 
     // --- LÓGICA ATUALIZADA AQUI ---
@@ -223,9 +245,10 @@ export async function editSentMessage(req: Request<{ id: string }, {}, EditSentM
     }
     if (messageContent) dataToUpdate.messageContent = messageContent;
     if (imageUrl !== undefined) dataToUpdate.imageUrl = imageUrl;
+    if (reactions !== undefined) dataToUpdate.reactions = reactions;
 
     if (Object.keys(dataToUpdate).length === 0) {
-        return res.status(400).json({ error: 'Nenhum dado fornecido para atualização (title, messageContent ou imageUrl).' });
+        return res.status(400).json({ error: 'Nenhum dado fornecido para atualização (title, messageContent, imageUrl ou reactions).' });
     }
     // --- FIM DA ATUALIZAÇÃO ---
 
@@ -235,26 +258,48 @@ export async function editSentMessage(req: Request<{ id: string }, {}, EditSentM
         if (record.status === 'PENDING') return res.status(400).json({ error: 'Esta mensagem ainda está pendente. Use o endpoint de agendamento para editá-la.' });
 
         // Se houver novo conteúdo ou imagem, edita a mensagem no Discord
-        if ((messageContent || imageUrl !== undefined) && record.messageUrl) {
+        if ((messageContent || imageUrl !== undefined || reactions !== undefined) && record.messageUrl) {
             const channel = await discordClient.channels.fetch(record.channelId);
             if (!(channel instanceof TextChannel)) return res.status(404).json({ error: 'Canal da mensagem não encontrado.' });
             const discordMessage = await channel.messages.fetch(record.messageUrl.split('/').pop()!);
 
             // Preparar opções de edição
-            const editOptions: any = { content: messageContent || record.messageContent };
+            const editOptions: any = {
+                content: messageContent || record.messageContent,
+                allowedMentions: {
+                    parse: ['everyone', 'roles', 'users'],
+                }
+            };
 
-            // Adicionar ou atualizar embed com imagem
+            // Adicionar ou atualizar imagem como attachment
             if (imageUrl !== undefined) {
                 if (imageUrl) {
-                    const embed = new EmbedBuilder().setImage(imageUrl);
-                    editOptions.embeds = [embed];
+                    const attachment = new AttachmentBuilder(imageUrl);
+                    editOptions.files = [attachment];
                 } else {
-                    // Remove embed se imageUrl for null/empty
-                    editOptions.embeds = [];
+                    // Remove attachment se imageUrl for null/empty
+                    editOptions.files = [];
                 }
             }
 
             await discordMessage.edit(editOptions);
+
+            // Atualizar reações se fornecidas
+            if (reactions !== undefined) {
+                // Remove todas as reações atuais do bot
+                await discordMessage.reactions.removeAll();
+
+                // Adiciona novas reações
+                if (reactions.length > 0) {
+                    for (const reaction of reactions) {
+                        try {
+                            await discordMessage.react(reaction);
+                        } catch (error) {
+                            console.error(`Erro ao adicionar reação ${reaction}:`, error);
+                        }
+                    }
+                }
+            }
         }
 
         const updatedRecord = await prisma.scheduledMessage.update({ where: { id: messageId }, data: dataToUpdate});
@@ -292,5 +337,35 @@ export async function deleteSentMessage(req: Request<{ id: string }>, res: Respo
     } catch (error) {
         console.error('Erro ao deletar mensagem enviada:', error);
         res.status(500).json({ error: 'Erro ao deletar mensagem.' });
+    }
+}
+
+export async function listSentMessages(req: Request, res: Response) {
+    try {
+        const sentMessages = await prisma.scheduledMessage.findMany({
+            where: {
+                status: 'SENT'
+            },
+            select: {
+                id: true,
+                imageUrl: true,
+                createdAt: true,
+                scheduleTime: true,
+                messageUrl: true
+            }
+        });
+
+        // Mapear para o formato esperado pelo backend (com sentAt ou createdAt)
+        const formattedMessages = sentMessages.map(msg => ({
+            id: msg.id,
+            imageUrl: msg.imageUrl,
+            createdAt: msg.createdAt,
+            sentAt: msg.scheduleTime // Usar scheduleTime como sentAt
+        }));
+
+        res.status(200).json(formattedMessages);
+    } catch (error) {
+        console.error('Erro ao listar mensagens enviadas:', error);
+        res.status(500).json({ error: 'Erro interno ao listar mensagens enviadas.' });
     }
 }

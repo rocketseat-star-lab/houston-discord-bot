@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listGuilds, listForumChannels, listGuildRoles, listGuildChannels } from '../controllers/guildsController';
+import { listGuilds, listForumChannels, listGuildRoles, listGuildChannels, listGuildEmojis } from '../controllers/guildsController';
 
 const router = Router();
 
@@ -14,5 +14,8 @@ router.get('/:guildId/roles', listGuildRoles);
 
 // Lista todos os canais de um servidor
 router.get('/:guildId/channels', listGuildChannels);
+
+// Lista todos os emojis de um servidor
+router.get('/:guildId/emojis', listGuildEmojis);
 
 export default router;

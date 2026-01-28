@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import prisma from '../services/prisma';
-import { Client, TextChannel, EmbedBuilder } from 'discord.js';
+import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
 import { MessageStatus } from '@prisma/client';
 
 export function initializeScheduler(discordClient: Client) {
@@ -31,16 +31,33 @@ export function initializeScheduler(discordClient: Client) {
 
         if (channel instanceof TextChannel) {
           // Preparar opções de envio
-          const options: any = { content: msg.messageContent };
+          const options: any = {
+            content: msg.messageContent,
+            allowedMentions: {
+              parse: ['everyone', 'roles', 'users'],
+            }
+          };
 
-          // Adicionar embed com imagem se imageUrl estiver presente
+          // Adicionar imagem como attachment se imageUrl estiver presente
           if (msg.imageUrl) {
-            const embed = new EmbedBuilder().setImage(msg.imageUrl);
-            options.embeds = [embed];
+            const attachment = new AttachmentBuilder(msg.imageUrl);
+            options.files = [attachment];
           }
 
           const sentMessage = await channel.send(options);
           messageUrl = sentMessage.url;
+
+          // Adicionar reações se fornecidas
+          if (msg.reactions && msg.reactions.length > 0) {
+            for (const reaction of msg.reactions) {
+              try {
+                await sentMessage.react(reaction);
+              } catch (error) {
+                console.error(`Erro ao adicionar reação ${reaction} na mensagem ${msg.id}:`, error);
+              }
+            }
+          }
+
           console.log(`Mensagem ${msg.id} enviada para o canal ${msg.channelId}.`);
         } else {
           status = 'ERROR_CHANNEL_NOT_FOUND';
