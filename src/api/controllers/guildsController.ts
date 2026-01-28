@@ -23,6 +23,8 @@ export async function listGuilds(req: Request, res: Response) {
             name: channel!.name,
             type: channel!.type,
             typeName: ChannelType[channel!.type],
+            position: channel!.position,
+            parentId: channel!.parentId,
           }))
           .sort((a, b) => {
             const channelA = channels.get(a.id);
