@@ -1,4 +1,4 @@
-import { Message, GuildMember, EmbedBuilder, TextChannel } from 'discord.js';
+import { Message, GuildMember, EmbedBuilder, TextChannel, NewsChannel } from 'discord.js';
 import { moderationRuleCache, CachedRule } from './moderationRuleCache';
 import axios from 'axios';
 
@@ -410,7 +410,7 @@ export class ModerationService {
 
             const logChannel = await message.guild?.channels.fetch(actionConfig.channelId);
 
-            if (!logChannel || !(logChannel instanceof TextChannel)) {
+            if (!logChannel || (!(logChannel instanceof TextChannel) && !(logChannel instanceof NewsChannel))) {
               return { success: false, error: 'Log channel not found or not a text channel' };
             }
 

@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import prisma from '../services/prisma';
-import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
+import { Client, TextChannel, NewsChannel, AttachmentBuilder } from 'discord.js';
 import { MessageStatus } from '@prisma/client';
 
 export function initializeScheduler(discordClient: Client) {
@@ -29,7 +29,7 @@ export function initializeScheduler(discordClient: Client) {
       try {
         const channel = await discordClient.channels.fetch(msg.channelId);
 
-        if (channel instanceof TextChannel) {
+        if (channel instanceof TextChannel || channel instanceof NewsChannel) {
           // Preparar opções de envio
           const options: any = {
             content: msg.messageContent,

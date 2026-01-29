@@ -1,4 +1,4 @@
-import { Message, TextChannel } from 'discord.js';
+import { Message, TextChannel, NewsChannel } from 'discord.js';
 import { getAiResponse } from '../../services/aiService';
 import { moderationService } from '../../services/moderationService';
 import 'dotenv/config';
@@ -11,7 +11,7 @@ export default {
     // 1. Ignora mensagens se o canal não for de texto ou se não for em um servidor.
     // Esta é a correção principal: garantimos que o canal é de um tipo que
     // suporta 'sendTyping' antes de prosseguir.
-    if (!(message.channel instanceof TextChannel) || !message.guild) return;
+    if (!(message.channel instanceof TextChannel || message.channel instanceof NewsChannel) || !message.guild) return;
 
     // 2. Ignora mensagens de outros bots e mensagens do sistema para evitar loops.
     if (message.author.bot || message.system) return;

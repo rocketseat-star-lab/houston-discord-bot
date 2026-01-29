@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Client, TextChannel } from 'discord.js';
+import { Client, TextChannel, NewsChannel } from 'discord.js';
 
 interface CreateWebhookBody {
   channel_id: string;
@@ -25,7 +25,7 @@ export async function createWebhook(req: Request<{}, {}, CreateWebhookBody>, res
     const channel = await discordClient.channels.fetch(channel_id);
 
     // Garante que o canal é um canal de texto de um servidor
-    if (!(channel instanceof TextChannel)) {
+    if (!(channel instanceof TextChannel) && !(channel instanceof NewsChannel)) {
       return res.status(400).json({ error: 'O ID fornecido não pertence a um canal de texto válido.' });
     }
 

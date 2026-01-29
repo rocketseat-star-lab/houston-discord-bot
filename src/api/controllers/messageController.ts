@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../../services/prisma';
-import { Client, TextChannel, AttachmentBuilder } from 'discord.js';
+import { Client, TextChannel, NewsChannel, AttachmentBuilder } from 'discord.js';
 import { MessageStatus, Prisma } from '@prisma/client';
 
 // Interfaces atualizadas
@@ -179,7 +179,9 @@ export async function sendImmediateMessage(req: Request<{}, {}, SendNowBody>, re
 
     try {
         const channel = await discordClient.channels.fetch(channelId);
-        if (!(channel instanceof TextChannel)) return res.status(404).json({ error: 'Canal não encontrado ou não é um canal de texto.' });
+        if (!(channel instanceof TextChannel) && !(channel instanceof NewsChannel)) {
+            return res.status(404).json({ error: 'Canal não encontrado ou não é um canal de texto/anúncio.' });
+        }
 
         // Preparar opções de envio
         const options: any = {
@@ -260,7 +262,9 @@ export async function editSentMessage(req: Request<{ id: string }, {}, EditSentM
         // Se houver novo conteúdo ou imagem, edita a mensagem no Discord
         if ((messageContent || imageUrl !== undefined || reactions !== undefined) && record.messageUrl) {
             const channel = await discordClient.channels.fetch(record.channelId);
-            if (!(channel instanceof TextChannel)) return res.status(404).json({ error: 'Canal da mensagem não encontrado.' });
+            if (!(channel instanceof TextChannel) && !(channel instanceof NewsChannel)) {
+                return res.status(404).json({ error: 'Canal da mensagem não encontrado.' });
+            }
             const discordMessage = await channel.messages.fetch(record.messageUrl.split('/').pop()!);
 
             // Preparar opções de edição
@@ -323,7 +327,7 @@ export async function deleteSentMessage(req: Request<{ id: string }>, res: Respo
         if (record.messageUrl) {
             try {
                 const channel = await discordClient.channels.fetch(record.channelId);
-                if (channel instanceof TextChannel) {
+                if (channel instanceof TextChannel || channel instanceof NewsChannel) {
                     await channel.messages.delete(record.messageUrl.split('/').pop()!);
                 }
             } catch (discordError) {
