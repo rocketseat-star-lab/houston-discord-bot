@@ -1,4 +1,4 @@
-import { Message, GuildMember, EmbedBuilder, TextChannel, NewsChannel } from 'discord.js';
+import { Message, GuildMember, EmbedBuilder, TextChannel, NewsChannel, PermissionsBitField } from 'discord.js';
 import { moderationRuleCache, CachedRule } from './moderationRuleCache';
 import axios from 'axios';
 
@@ -468,6 +468,71 @@ export class ModerationService {
             return { success: true };
           }
           return { success: false, error: 'Member or roleId not found' };
+
+        case 'REPLY_IN_CHANNEL':
+          try {
+            const channel = message.channel;
+
+            // Verifica se o canal é um TextChannel ou NewsChannel
+            if (!(channel instanceof TextChannel) && !(channel instanceof NewsChannel)) {
+              return { success: false, error: 'Channel is not a text channel' };
+            }
+
+            // Verifica se o bot tem permissão para enviar mensagens no canal
+            const botMember = message.guild?.members.me;
+            if (!botMember) {
+              return { success: false, error: 'Bot member not found in guild' };
+            }
+
+            const hasPermission = channel.permissionsFor(botMember)?.has([
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.ViewChannel,
+            ]);
+
+            if (!hasPermission) {
+              return {
+                success: false,
+                error: 'Bot does not have permission to send messages in this channel',
+              };
+            }
+
+            // Monta a mensagem
+            let replyMessage = actionConfig.message || '';
+
+            // Substitui {user} pela menção do usuário
+            if (replyMessage.includes('{user}')) {
+              replyMessage = replyMessage.replace(/{user}/g, `<@${message.author.id}>`);
+            } else if (actionConfig.mentionUser) {
+              // Adiciona menção no início se não tiver {user} e mentionUser estiver ativado
+              replyMessage = `<@${message.author.id}> ${replyMessage}`;
+            }
+
+            if (!replyMessage.trim()) {
+              return { success: false, error: 'Message is empty' };
+            }
+
+            // Envia a resposta no canal
+            const sentMessage = await channel.send(replyMessage);
+
+            // Agenda deleção da mensagem se configurado
+            const deleteAfter = actionConfig.deleteAfter || 0;
+            if (deleteAfter > 0) {
+              setTimeout(async () => {
+                try {
+                  await sentMessage.delete();
+                } catch (error) {
+                  console.warn('[ModerationService] Could not delete reply message:', error);
+                }
+              }, deleteAfter * 1000);
+            }
+
+            return { success: true };
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to send reply in channel',
+            };
+          }
 
         case 'LOG_ONLY':
           // Apenas registra no backend, sem ação no Discord
