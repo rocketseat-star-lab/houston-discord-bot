@@ -6,34 +6,6 @@ export default {
   name: Events.GuildMemberUpdate,
   async execute(oldMember: GuildMember, newMember: GuildMember) {
     try {
-      // Atualizar cache de membros sempre que houver mudança
-      await prisma.currentMember.upsert({
-        where: {
-          guildId_userId: {
-            guildId: newMember.guild.id,
-            userId: newMember.user.id,
-          },
-        },
-        update: {
-          username: newMember.user.username,
-          tag: newMember.user.tag,
-          displayName: newMember.displayName,
-          avatarUrl: newMember.user.displayAvatarURL({ size: 256 }),
-          isBot: newMember.user.bot,
-          joinedAt: newMember.joinedAt,
-        },
-        create: {
-          guildId: newMember.guild.id,
-          userId: newMember.user.id,
-          username: newMember.user.username,
-          tag: newMember.user.tag,
-          displayName: newMember.displayName,
-          avatarUrl: newMember.user.displayAvatarURL({ size: 256 }),
-          isBot: newMember.user.bot,
-          joinedAt: newMember.joinedAt,
-        },
-      });
-
       // Verificar se houve mudança no timeout
       const oldTimeout = oldMember.communicationDisabledUntil;
       const newTimeout = newMember.communicationDisabledUntil;

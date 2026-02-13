@@ -19,12 +19,8 @@ import forumRoutes from './api/routes/forum.routes';
 import dmRoutes from './api/routes/dm.routes';
 import jobsRoutes from './api/routes/jobs.routes';
 import moderationRoutes from './api/routes/moderation.routes';
-import discordDataRoutes from './api/routes/discordData.routes';
 import { initializeScheduler } from './scheduler/messageScheduler';
 import { moderationRuleCache } from './services/moderationRuleCache';
-import { populateJoinHistoryOnStartup } from './services/populateJoinHistoryService';
-import { syncAllMembersToDatabase } from './services/memberCacheService';
-import prisma from './services/prisma';
 
 // --- INICIALIZAÇÃO DO CLIENTE DISCORD ---
 const client = new Client({
@@ -34,13 +30,10 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.GuildVoiceStates,      // Para rastrear atividade de voz
-    GatewayIntentBits.GuildMessageReactions, // Para rastrear reações
   ],
   partials: [
-    Partials.Message,     // Para reagir em mensagens antigas
-    Partials.Channel,     // Para canais não em cache
-    Partials.Reaction,    // Para reações em mensagens não em cache
+    Partials.Message,
+    Partials.Channel,
   ],
 });
 
@@ -105,7 +98,6 @@ app.use('/api/v1/forum-threads', apiKeyAuth, forumRoutes);
 app.use('/api/v1/dm', apiKeyAuth, dmRoutes);
 app.use('/api/v1/jobs', apiKeyAuth, jobsRoutes);
 app.use('/api/v1/moderation', apiKeyAuth, moderationRoutes);
-app.use('/api/v1/discord-data', apiKeyAuth, discordDataRoutes);
 
 // --- INICIALIZAÇÃO GERAL ---
 console.log('🚀 Starting Houston Discord Bot...');
@@ -125,28 +117,6 @@ client.login(process.env.DISCORD_BOT_TOKEN)
     console.log('⏳ Initializing scheduler...');
     initializeScheduler(client);
     console.log('✅ 📅 Scheduler initialized!');
-
-    // IMPORTANTE: Sync membros PRIMEIRO para evitar rate limiting
-    console.log('⏳ Syncing all members to database cache...');
-    await syncAllMembersToDatabase(client);
-    console.log('✅ 💾 All members cached in database!');
-
-    // Verificar se join history precisa ser populado (ANTES do servidor iniciar)
-    // Isso garante que mesmo com reinícios, só popula uma vez
-    console.log('⏳ Checking if join history needs population...');
-    const joinLogCount = await prisma.memberJoinLog.count();
-
-    if (joinLogCount === 0) {
-      console.log('📊 Join history is empty, populating now (this may take a few minutes)...');
-      try {
-        await populateJoinHistoryOnStartup(client);
-        console.log('✅ 👥 Member join history populated!');
-      } catch (err) {
-        console.error('❌ Error during initial data population:', err);
-      }
-    } else {
-      console.log(`✅ Join history already populated (${joinLogCount} records), skipping.`);
-    }
 
     app.listen(PORT, () => {
       console.log(`✅ 🌐 API Server is running on port ${PORT}`);
