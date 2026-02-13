@@ -2,22 +2,7 @@ import { Request, Response } from 'express';
 import { Client } from 'discord.js';
 import prisma from '../../services/prisma';
 
-// Cache de membros para evitar rate limit do Discord
-// Armazena o timestamp da última vez que os membros foram buscados
-const membersFetchCache = new Map<string, number>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos em milissegundos
-const MAX_CACHE_SIZE = 100; // Limite máximo de entradas no cache
-
-// Limpa entradas antigas do cache a cada 10 minutos
-setInterval(() => {
-  const now = Date.now();
-  for (const [guildId, timestamp] of membersFetchCache.entries()) {
-    if (now - timestamp > CACHE_TTL * 2) { // Remove entradas com mais de 10min
-      membersFetchCache.delete(guildId);
-    }
-  }
-  console.log(`[Cache] Limpeza automática: ${membersFetchCache.size} entradas restantes`);
-}, 10 * 60 * 1000);
+// Removido cache Map - agora usamos CurrentMember no banco como cache
 
 /**
  * GET /api/v1/discord-data/guilds
@@ -780,102 +765,75 @@ export const getCurrentMembers = async (req: Request, res: Response) => {
       });
     }
 
-    // Debug: listar todas as guilds disponíveis
-    console.log('[getCurrentMembers] Guilds disponíveis:',
-      Array.from(discordClient.guilds.cache.values()).map(g => ({ id: g.id, name: g.name }))
-    );
-    console.log('[getCurrentMembers] Procurando guild:', guildId);
-
-    // Buscar guild
+    // Verificar se guild existe
     const guild = discordClient.guilds.cache.get(guildId);
-
     if (!guild) {
       return res.status(404).json({
         success: false,
         error: 'Guild not found',
-        availableGuilds: Array.from(discordClient.guilds.cache.values()).map(g => ({ id: g.id, name: g.name })),
       });
     }
 
-    // Verificar cache antes de fazer fetch (evita rate limit)
-    const now = Date.now();
-    const lastFetch = membersFetchCache.get(guildId);
-    const shouldFetch = !lastFetch || (now - lastFetch) > CACHE_TTL;
+    // Buscar membros do BANCO DE DADOS ao invés do Discord
+    // Isso evita rate limit e problemas de memória
+    const limitNumber = limit ? parseInt(limit as string, 10) : 100;
 
-    if (shouldFetch) {
-      console.log(`[getCurrentMembers] Cache expirado ou não existe, fazendo fetch de membros para guild ${guildId}`);
-      try {
-        await guild.members.fetch();
-        membersFetchCache.set(guildId, now);
-      } catch (error: any) {
-        // Se houver rate limit, usar cache existente
-        if (error.name === 'GatewayRateLimitError') {
-          console.warn(`[getCurrentMembers] Rate limit detectado, usando cache existente. Retry after: ${error.data?.retry_after}s`);
-        } else {
-          throw error; // Re-lançar outros erros
-        }
-      }
-    } else {
-      const cacheAge = Math.floor((now - lastFetch) / 1000);
-      console.log(`[getCurrentMembers] Usando cache de membros (${cacheAge}s atrás)`);
-    }
-
-    // Filtrar membros
-    let members = Array.from(guild.members.cache.values());
+    const whereClause: any = { guildId };
 
     // Filtro por bot
     if (isBot !== undefined) {
-      const isBotFilter = isBot === 'true';
-      members = members.filter((m) => m.user.bot === isBotFilter);
+      whereClause.isBot = isBot === 'true';
     }
 
-    // Filtro por busca (username, tag, displayName, ID)
+    // Filtro por busca
     if (search) {
       const searchLower = (search as string).toLowerCase();
-      const searchStr = search as string;
-      members = members.filter(
-        (m) =>
-          m.user.username.toLowerCase().includes(searchLower) ||
-          m.user.tag.toLowerCase().includes(searchLower) ||
-          m.displayName.toLowerCase().includes(searchLower) ||
-          m.user.id.includes(searchStr) // Busca por ID (parcial ou completo)
-      );
+      whereClause.OR = [
+        { username: { contains: searchLower, mode: 'insensitive' } },
+        { tag: { contains: searchLower, mode: 'insensitive' } },
+        { displayName: { contains: searchLower, mode: 'insensitive' } },
+        { userId: { contains: search as string } },
+      ];
     }
 
-    // Limitar resultados
-    const limitNumber = limit ? parseInt(limit as string, 10) : 100;
-    members = members.slice(0, limitNumber);
+    // Buscar membros do banco
+    const members = await prisma.currentMember.findMany({
+      where: whereClause,
+      take: limitNumber,
+      orderBy: { username: 'asc' },
+    });
 
-    // Mapear para formato de resposta
+    // Contar total de membros na guild (do banco)
+    const totalMembers = await prisma.currentMember.count({
+      where: { guildId },
+    });
+
+    // Mapear para formato de resposta (sem roles, pois não temos no banco)
     const membersData = members.map((member) => ({
-      userId: member.user.id,
-      username: member.user.username,
-      tag: member.user.tag,
+      userId: member.userId,
+      username: member.username,
+      tag: member.tag,
       displayName: member.displayName,
-      avatarUrl: member.user.displayAvatarURL({ size: 256 }),
-      isBot: member.user.bot,
+      avatarUrl: member.avatarUrl,
+      isBot: member.isBot,
       joinedAt: member.joinedAt?.toISOString() || null,
-      roles: member.roles.cache.map((role) => ({
-        id: role.id,
-        name: role.name,
-        color: role.hexColor,
-      })),
+      roles: [], // Não temos roles no banco, seria necessário buscar do Discord se precisar
     }));
 
     console.log(
-      `[DiscordDataController] Retornando ${membersData.length} membros atuais do guild ${guildId}`
+      `[getCurrentMembers] Retornando ${membersData.length} membros do banco (total na guild: ${totalMembers})`
     );
 
     return res.status(200).json({
       success: true,
       data: {
         members: membersData,
-        total: guild.memberCount,
+        total: totalMembers,
         fetched: membersData.length,
       },
     });
   } catch (error) {
-    console.error('[DiscordDataController] Error in getCurrentMembers:', error);
+    console.error('[getCurrentMembers] Error:', error);
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
