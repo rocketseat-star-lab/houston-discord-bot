@@ -9,6 +9,7 @@ import {
   getCurrentMembers,
   getAvailableGuilds,
   populateJoinHistory,
+  syncGuildMembers,
 } from '../controllers/discordDataController';
 
 const router = Router();
@@ -26,6 +27,14 @@ router.get('/guilds', getAvailableGuilds);
  * Query params: search?, isBot?, limit?
  */
 router.get('/guilds/:guildId/members', getCurrentMembers);
+
+/**
+ * POST /api/v1/discord-data/guilds/:guildId/sync-members
+ * Sincroniza membros de uma guild com paginação e batch inserts
+ * Executa em background e retorna imediatamente (202)
+ * Params: guildId (URL)
+ */
+router.post('/guilds/:guildId/sync-members', syncGuildMembers);
 
 /**
  * POST /api/v1/discord-data/guilds/:guildId/populate-join-history

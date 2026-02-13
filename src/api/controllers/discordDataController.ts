@@ -808,6 +808,10 @@ export const getCurrentMembers = async (req: Request, res: Response) => {
       where: { guildId },
     });
 
+    // Verificar se precisa sincronizar
+    // Se o banco tem < 10% dos membros do Discord, está desatualizado
+    const needsSync = totalMembers < guild.memberCount * 0.1;
+
     // Mapear para formato de resposta (sem roles, pois não temos no banco)
     const membersData = members.map((member) => ({
       userId: member.userId,
@@ -821,7 +825,7 @@ export const getCurrentMembers = async (req: Request, res: Response) => {
     }));
 
     console.log(
-      `[getCurrentMembers] Retornando ${membersData.length} membros do banco (total na guild: ${totalMembers})`
+      `[getCurrentMembers] Retornando ${membersData.length} membros do banco (total na guild: ${totalMembers}, Discord: ${guild.memberCount}, needsSync: ${needsSync})`
     );
 
     return res.status(200).json({
@@ -830,10 +834,78 @@ export const getCurrentMembers = async (req: Request, res: Response) => {
         members: membersData,
         total: totalMembers,
         fetched: membersData.length,
+        discordTotal: guild.memberCount, // Total no Discord
+        needsSync, // Flag indicando se precisa sincronizar
       },
     });
   } catch (error) {
     console.error('[getCurrentMembers] Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+};
+
+/**
+ * POST /api/v1/discord-data/guilds/:guildId/sync-members
+ * Sincroniza membros de uma guild específica com paginação e batch inserts
+ * Usa estratégia otimizada para evitar rate limit
+ */
+export const syncGuildMembers = async (req: Request, res: Response) => {
+  try {
+    const guildId = req.params.guildId as string;
+
+    if (!guildId) {
+      return res.status(400).json({
+        success: false,
+        error: 'guildId is required',
+      });
+    }
+
+    const discordClient = req.app.get('discordClient') as Client;
+
+    if (!discordClient || !discordClient.isReady()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Discord client not ready',
+      });
+    }
+
+    const guild = discordClient.guilds.cache.get(guildId);
+    if (!guild) {
+      return res.status(404).json({
+        success: false,
+        error: 'Guild not found',
+      });
+    }
+
+    console.log(`[syncGuildMembers] Iniciando sincronização manual para ${guild.name}`);
+
+    // Importar função de sync
+    const { syncSingleGuild } = await import('../../services/memberSyncService');
+
+    // Executar sync em background (não bloquear resposta)
+    syncSingleGuild(discordClient as Client<true>, guildId)
+      .then((count) => {
+        console.log(`[syncGuildMembers] Sincronização concluída: ${count} membros`);
+      })
+      .catch((error) => {
+        console.error(`[syncGuildMembers] Erro na sincronização:`, error);
+      });
+
+    // Retornar imediatamente
+    return res.status(202).json({
+      success: true,
+      message: 'Sincronização iniciada em background',
+      data: {
+        guildId,
+        guildName: guild.name,
+        expectedMembers: guild.memberCount,
+      },
+    });
+  } catch (error) {
+    console.error('[syncGuildMembers] Error:', error);
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
