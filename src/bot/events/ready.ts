@@ -9,14 +9,17 @@ export default {
     console.log(`📊 Connected to ${client.guilds.cache.size} server(s)`);
     console.log('👂 Listening for messages...');
 
-    // Sincronizar membros em background usando REST API com paginação
-    // NÃO carrega tudo na memória - processa página por página
-    setTimeout(async () => {
-      try {
-        await syncAllGuildMembers(client);
-      } catch (error) {
-        console.error('[ready] Erro ao sincronizar membros:', error);
-      }
-    }, 5000);
+    // SYNC AUTOMÁTICO PERMANENTEMENTE DESABILITADO
+    // Mesmo com paginação, Railway tem limite de memória muito baixo (~256MB)
+    // Para sincronizar: POST /api/v1/discord-data/guilds/:guildId/sync-members
+    console.log('ℹ️  Sync manual disponível via API endpoint');
+
+    // setTimeout(async () => {
+    //   try {
+    //     await syncAllGuildMembers(client);
+    //   } catch (error) {
+    //     console.error('[ready] Erro ao sincronizar membros:', error);
+    //   }
+    // }, 5000);
   },
 };

@@ -6,8 +6,9 @@
 import { Client } from 'discord.js';
 import prisma from '../services/prisma';
 
-const FETCH_LIMIT = 1000; // Máximo permitido pela API do Discord
-const DB_BATCH_SIZE = 750; // Tamanho do batch para inserir no banco
+const FETCH_LIMIT = 500; // Reduzido para economizar memória
+const DB_BATCH_SIZE = 250; // Reduzido para economizar memória
+const PAGE_DELAY = 2000; // Delay maior entre páginas para GC
 
 interface DiscordMember {
   user: {
@@ -98,8 +99,16 @@ async function syncGuildMembers(client: Client<true>, guildId: string): Promise<
       // Preparar próxima página
       after = members[members.length - 1].user.id;
 
-      // Delay para evitar rate limit
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Limpar array para liberar memória
+      members.length = 0;
+
+      // Delay maior para garbage collection
+      await new Promise((resolve) => setTimeout(resolve, PAGE_DELAY));
+
+      // Forçar garbage collection se disponível
+      if (global.gc) {
+        global.gc();
+      }
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
