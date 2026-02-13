@@ -6,6 +6,18 @@ import prisma from '../../services/prisma';
 // Armazena o timestamp da última vez que os membros foram buscados
 const membersFetchCache = new Map<string, number>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos em milissegundos
+const MAX_CACHE_SIZE = 100; // Limite máximo de entradas no cache
+
+// Limpa entradas antigas do cache a cada 10 minutos
+setInterval(() => {
+  const now = Date.now();
+  for (const [guildId, timestamp] of membersFetchCache.entries()) {
+    if (now - timestamp > CACHE_TTL * 2) { // Remove entradas com mais de 10min
+      membersFetchCache.delete(guildId);
+    }
+  }
+  console.log(`[Cache] Limpeza automática: ${membersFetchCache.size} entradas restantes`);
+}, 10 * 60 * 1000);
 
 /**
  * GET /api/v1/discord-data/guilds
