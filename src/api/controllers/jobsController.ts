@@ -35,7 +35,7 @@ export async function listGuilds(req: Request, res: Response) {
  */
 export async function listJobChannels(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
-  const { guildId } = req.params;
+  const guildId = req.params.guildId as string;
 
   if (!discordClient || !discordClient.isReady()) {
     return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
@@ -127,7 +127,7 @@ export async function createJobThread(req: Request, res: Response) {
  */
 export async function closeJobThread(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
-  const { threadId } = req.params;
+  const threadId = req.params.threadId as string;
   const { closingMessage } = req.body;
 
   if (!discordClient || !discordClient.isReady()) {

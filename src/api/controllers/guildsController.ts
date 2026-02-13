@@ -53,7 +53,7 @@ export async function listGuilds(req: Request, res: Response) {
  */
 export async function listForumChannels(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
-  const { guildId } = req.params;
+  const guildId = req.params.guildId as string;
 
   if (!discordClient || !discordClient.isReady()) {
     return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
@@ -102,7 +102,7 @@ export async function listForumChannels(req: Request, res: Response) {
  */
 export async function listGuildRoles(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
-  const { guildId } = req.params;
+  const guildId = req.params.guildId as string;
 
   if (!discordClient || !discordClient.isReady()) {
     return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
@@ -164,7 +164,7 @@ export async function listGuildRoles(req: Request, res: Response) {
  */
 export async function listGuildChannels(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
-  const { guildId } = req.params;
+  const guildId = req.params.guildId as string;
 
   if (!discordClient || !discordClient.isReady()) {
     return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });
@@ -203,7 +203,7 @@ export async function listGuildChannels(req: Request, res: Response) {
  */
 export async function listGuildEmojis(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
-  const { guildId } = req.params;
+  const guildId = req.params.guildId as string;
 
   if (!discordClient || !discordClient.isReady()) {
     return res.status(503).json({ error: 'O cliente do Discord não está pronto ou disponível.' });

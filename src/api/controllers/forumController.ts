@@ -127,7 +127,7 @@ export async function createForumThread(req: Request, res: Response) {
  */
 export async function closeForumThread(req: Request, res: Response) {
   const discordClient = req.app.get('discordClient') as Client;
-  const { threadId } = req.params;
+  const threadId = req.params.threadId as string;
   const { title, closingMessage } = req.body;
 
   console.log(`[closeForumThread] Recebida requisição para fechar thread: ${threadId}`);

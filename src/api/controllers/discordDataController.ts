@@ -55,7 +55,8 @@ export const getAvailableGuilds = async (req: Request, res: Response) => {
  */
 export const getNewJoinsLeaves = async (req: Request, res: Response) => {
   try {
-    const { guildId, since } = req.query;
+    const guildId = req.query.guildId as string;
+    const since = req.query.since as string | undefined;
 
     if (!guildId) {
       return res.status(400).json({
@@ -64,12 +65,12 @@ export const getNewJoinsLeaves = async (req: Request, res: Response) => {
       });
     }
 
-    const sinceDate = since ? new Date(since as string) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sinceDate = since ? new Date(since) : new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const [joins, leaves] = await Promise.all([
       prisma.memberJoinLog.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           joinedAt: {
             gte: sinceDate,
           },
@@ -78,7 +79,7 @@ export const getNewJoinsLeaves = async (req: Request, res: Response) => {
       }),
       prisma.memberLeaveLog.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           leftAt: {
             gte: sinceDate,
           },
@@ -114,7 +115,9 @@ export const getNewJoinsLeaves = async (req: Request, res: Response) => {
  */
 export const getMessageAggregates = async (req: Request, res: Response) => {
   try {
-    const { guildId, since, groupBy = 'day' } = req.query;
+    const guildId = req.query.guildId as string;
+    const since = req.query.since as string | undefined;
+    const groupBy = (req.query.groupBy as string) || 'day';
 
     if (!guildId) {
       return res.status(400).json({
@@ -123,13 +126,13 @@ export const getMessageAggregates = async (req: Request, res: Response) => {
       });
     }
 
-    const sinceDate = since ? new Date(since as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const sinceDate = since ? new Date(since) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     // Agregação por canal
     const byChannel = await prisma.messageLog.groupBy({
       by: ['channelId'],
       where: {
-        guildId: guildId as string,
+        guildId,
         createdAt: {
           gte: sinceDate,
         },
@@ -147,7 +150,7 @@ export const getMessageAggregates = async (req: Request, res: Response) => {
     const byUser = await prisma.messageLog.groupBy({
       by: ['userId', 'username'],
       where: {
-        guildId: guildId as string,
+        guildId,
         createdAt: {
           gte: sinceDate,
         },
@@ -166,7 +169,7 @@ export const getMessageAggregates = async (req: Request, res: Response) => {
     // Total de mensagens
     const total = await prisma.messageLog.count({
       where: {
-        guildId: guildId as string,
+        guildId,
         createdAt: {
           gte: sinceDate,
         },
@@ -208,7 +211,8 @@ export const getMessageAggregates = async (req: Request, res: Response) => {
  */
 export const getVoiceAggregates = async (req: Request, res: Response) => {
   try {
-    const { guildId, since } = req.query;
+    const guildId = req.query.guildId as string;
+    const since = req.query.since as string | undefined;
 
     if (!guildId) {
       return res.status(400).json({
@@ -217,13 +221,13 @@ export const getVoiceAggregates = async (req: Request, res: Response) => {
       });
     }
 
-    const sinceDate = since ? new Date(since as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const sinceDate = since ? new Date(since) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     // Agregação por canal
     const byChannel = await prisma.voiceActivityLog.groupBy({
       by: ['channelId'],
       where: {
-        guildId: guildId as string,
+        guildId,
         joinedAt: {
           gte: sinceDate,
         },
@@ -243,7 +247,7 @@ export const getVoiceAggregates = async (req: Request, res: Response) => {
     const byUser = await prisma.voiceActivityLog.groupBy({
       by: ['userId', 'username'],
       where: {
-        guildId: guildId as string,
+        guildId,
         joinedAt: {
           gte: sinceDate,
         },
@@ -268,7 +272,7 @@ export const getVoiceAggregates = async (req: Request, res: Response) => {
     // Total de minutos de voz
     const totalResult = await prisma.voiceActivityLog.aggregate({
       where: {
-        guildId: guildId as string,
+        guildId,
         joinedAt: {
           gte: sinceDate,
         },
@@ -318,7 +322,8 @@ export const getVoiceAggregates = async (req: Request, res: Response) => {
  */
 export const getReactionAggregates = async (req: Request, res: Response) => {
   try {
-    const { guildId, since } = req.query;
+    const guildId = req.query.guildId as string;
+    const since = req.query.since as string | undefined;
 
     if (!guildId) {
       return res.status(400).json({
@@ -327,13 +332,13 @@ export const getReactionAggregates = async (req: Request, res: Response) => {
       });
     }
 
-    const sinceDate = since ? new Date(since as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const sinceDate = since ? new Date(since) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     // Agregação por emoji
     const byEmoji = await prisma.reactionLog.groupBy({
       by: ['emojiName', 'isCustom'],
       where: {
-        guildId: guildId as string,
+        guildId,
         addedAt: {
           gte: sinceDate,
         },
@@ -353,7 +358,7 @@ export const getReactionAggregates = async (req: Request, res: Response) => {
     const byChannel = await prisma.reactionLog.groupBy({
       by: ['channelId'],
       where: {
-        guildId: guildId as string,
+        guildId,
         addedAt: {
           gte: sinceDate,
         },
@@ -367,7 +372,7 @@ export const getReactionAggregates = async (req: Request, res: Response) => {
     const byUser = await prisma.reactionLog.groupBy({
       by: ['userId'],
       where: {
-        guildId: guildId as string,
+        guildId,
         addedAt: {
           gte: sinceDate,
         },
@@ -386,7 +391,7 @@ export const getReactionAggregates = async (req: Request, res: Response) => {
     // Total
     const total = await prisma.reactionLog.count({
       where: {
-        guildId: guildId as string,
+        guildId,
         addedAt: {
           gte: sinceDate,
         },
@@ -431,8 +436,10 @@ export const getReactionAggregates = async (req: Request, res: Response) => {
  */
 export const getUserProfile = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
-    const { guildId, startDate, endDate } = req.query;
+    const userId = req.params.userId as string;
+    const guildId = req.query.guildId as string;
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
 
     if (!guildId) {
       return res.status(400).json({
@@ -441,8 +448,8 @@ export const getUserProfile = async (req: Request, res: Response) => {
       });
     }
 
-    const start = startDate ? new Date(startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const end = endDate ? new Date(endDate as string) : new Date();
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
 
     console.log(`[getUserProfile] Buscando perfil de ${userId} no guild ${guildId}`);
     console.log(`[getUserProfile] Período: ${start.toISOString()} até ${end.toISOString()}`);
@@ -452,7 +459,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
       // TODAS as mensagens (para agregar por canal)
       prisma.messageLog.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           userId,
           createdAt: {
             gte: start,
@@ -464,7 +471,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
       // Voz (últimas 50 sessões)
       prisma.voiceActivityLog.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           userId,
           joinedAt: {
             gte: start,
@@ -477,7 +484,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
       // Reações (últimas 100)
       prisma.reactionLog.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           userId,
           addedAt: {
             gte: start,
@@ -490,7 +497,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
       // Bans
       prisma.moderationBan.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           userId,
         },
         orderBy: { bannedAt: 'desc' },
@@ -498,7 +505,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
       // Timeouts
       prisma.moderationTimeout.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           userId,
         },
         orderBy: { appliedAt: 'desc' },
@@ -506,7 +513,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
       // Histórico de entrada
       prisma.memberJoinLog.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           userId,
         },
         orderBy: { joinedAt: 'desc' },
@@ -518,7 +525,7 @@ export const getUserProfile = async (req: Request, res: Response) => {
     const cachedMember = await prisma.currentMember.findUnique({
       where: {
         guildId_userId: {
-          guildId: guildId as string,
+          guildId,
           userId,
         },
       },
@@ -686,8 +693,8 @@ export const getUserProfile = async (req: Request, res: Response) => {
  */
 export const getModerationHistory = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
-    const { guildId } = req.query;
+    const userId = req.params.userId as string;
+    const guildId = req.query.guildId as string;
 
     if (!guildId) {
       return res.status(400).json({
@@ -699,14 +706,14 @@ export const getModerationHistory = async (req: Request, res: Response) => {
     const [bans, timeouts] = await Promise.all([
       prisma.moderationBan.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           userId,
         },
         orderBy: { bannedAt: 'desc' },
       }),
       prisma.moderationTimeout.findMany({
         where: {
-          guildId: guildId as string,
+          guildId,
           userId,
         },
         orderBy: { appliedAt: 'desc' },
@@ -740,8 +747,10 @@ export const getModerationHistory = async (req: Request, res: Response) => {
  */
 export const getCurrentMembers = async (req: Request, res: Response) => {
   try {
-    const { guildId } = req.params;
-    const { search, isBot, limit } = req.query;
+    const guildId = req.params.guildId as string;
+    const search = req.query.search as string | undefined;
+    const isBot = req.query.isBot as string | undefined;
+    const limit = req.query.limit as string | undefined;
 
     if (!guildId) {
       return res.status(400).json({
@@ -869,7 +878,7 @@ export const getCurrentMembers = async (req: Request, res: Response) => {
  */
 export const populateJoinHistory = async (req: Request, res: Response) => {
   try {
-    const { guildId } = req.params;
+    const guildId = req.params.guildId as string;
 
     if (!guildId) {
       return res.status(400).json({
