@@ -5,4 +5,4 @@
 
 */
 -- AlterTable
-ALTER TABLE "public"."scheduled_messages" ADD COLUMN     "guild_id" TEXT NOT NULL;
+ALTER TABLE "scheduled_messages" ADD COLUMN     "guild_id" TEXT NOT NULL;
