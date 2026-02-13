@@ -75,6 +75,19 @@ export class ModerationService {
    * Avalia uma mensagem contra uma regra específica
    */
   private async evaluateRule(message: Message, rule: CachedRule): Promise<void> {
+    // Verifica se a regra se aplica ao servidor atual
+    const currentGuildId = message.guild?.id;
+    if (!currentGuildId) {
+      return; // Mensagem não é de um servidor
+    }
+
+    // Se guildIds está definido e não está vazio, verifica se o servidor atual está na lista
+    if (rule.guildIds && rule.guildIds.length > 0) {
+      if (!rule.guildIds.includes(currentGuildId)) {
+        return; // Regra não se aplica a este servidor
+      }
+    }
+
     // Verifica se o usuário tem role de isenção
     if (await this.hasExemptRole(message.member, rule.exemptRoleIds)) {
       return;

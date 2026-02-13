@@ -12,6 +12,7 @@ export interface CachedRule {
   priority: number;
   triggerType: string;
   triggerConfig: Record<string, any>;
+  guildIds: string[]; // IDs dos servidores onde a regra deve ser aplicada
   exemptRoleIds: string[];
   exemptChannelIds: string[];
   actions: CachedAction[];

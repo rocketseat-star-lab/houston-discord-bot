@@ -1,6 +1,7 @@
 import { Message, TextChannel, NewsChannel } from 'discord.js';
 import { getAiResponse } from '../../services/aiService';
 import { moderationService } from '../../services/moderationService';
+import prisma from '../../services/prisma';
 import 'dotenv/config';
 
 export default {
@@ -22,6 +23,13 @@ export default {
       await moderationService.evaluateMessage(message);
     } catch (error) {
       console.error('[messageCreate] Error in moderation evaluation:', error);
+    }
+
+    // ---- Logging de Mensagens (Métricas) ----
+    try {
+      await logMessageActivity(message);
+    } catch (error) {
+      console.error('[messageCreate] Error logging message activity:', error);
     }
 
     // 3. Verifica se o bot foi mencionado e se está no servidor configurado.
@@ -61,3 +69,43 @@ export default {
     }
   },
 };
+
+// ---- Helper Function para Logging de Mensagens ----
+async function logMessageActivity(message: Message) {
+  const content = message.content || '';
+  const hasAttachments = message.attachments.size > 0;
+  const attachmentCount = message.attachments.size;
+
+  // Detectar links usando regex
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const links = content.match(urlRegex) || [];
+  const hasLinks = links.length > 0;
+  const linkCount = links.length;
+
+  // Detectar menções
+  const hasMentions = message.mentions.users.size > 0 || message.mentions.roles.size > 0;
+  const mentionCount = message.mentions.users.size + message.mentions.roles.size;
+
+  // Contadores de texto (usamos o conteúdo para contar, mas não armazenamos)
+  const characterCount = content.length;
+  const wordCount = content.trim().split(/\s+/).filter(w => w.length > 0).length;
+
+  await prisma.messageLog.create({
+    data: {
+      messageId: message.id,
+      guildId: message.guild!.id,
+      channelId: message.channel.id,
+      userId: message.author.id,
+      username: message.author.tag,
+      // Conteúdo não é armazenado - apenas métricas
+      hasAttachments,
+      attachmentCount,
+      hasLinks,
+      linkCount,
+      hasMentions,
+      mentionCount,
+      characterCount,
+      wordCount,
+    },
+  });
+}

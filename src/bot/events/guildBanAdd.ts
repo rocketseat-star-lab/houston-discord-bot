@@ -1,5 +1,6 @@
 import { Events, GuildBan, AuditLogEvent } from 'discord.js';
 import axios from 'axios';
+import prisma from '../../services/prisma';
 
 export default {
   name: Events.GuildBanAdd,
@@ -37,6 +38,21 @@ export default {
         bannedAt: new Date().toISOString(),
       };
 
+      // DUAL STORAGE: 1. PRIMEIRO salvar no DB do bot (fonte única da verdade)
+      await prisma.moderationBan.create({
+        data: {
+          guildId: ban.guild.id,
+          userId: ban.user.id,
+          username: ban.user.tag,
+          moderatorId: moderator?.id || null,
+          moderatorTag: moderator?.tag || null,
+          reason,
+          permanent: true,
+          bannedAt: new Date(),
+        },
+      });
+
+      // 2. DEPOIS enviar PUSH para Tools backend (tempo real)
       await axios.post(
         `${backendApiUrl}/api/moderation/internal/bans`,
         banData,

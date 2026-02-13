@@ -1,6 +1,3 @@
-// Este é o seu arquivo de schema do Prisma,
-// aprenda mais sobre ele na documentação: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,7 +8,133 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// Modelo para as mensagens agendadas
+model CurrentMember {
+  id          BigInt    @id @default(autoincrement())
+  guildId     String    @map("guild_id")
+  userId      String    @map("user_id")
+  username    String
+  tag         String
+  displayName String    @map("display_name")
+  avatarUrl   String?   @map("avatar_url")
+  isBot       Boolean   @default(false) @map("is_bot")
+  joinedAt    DateTime? @map("joined_at")
+  updatedAt   DateTime  @default(now()) @map("updated_at")
+
+  @@unique([guildId, userId])
+  @@index([guildId])
+  @@index([userId])
+  @@map("houston_bot_current_members")
+}
+
+model MemberJoinLog {
+  id            BigInt   @id @default(autoincrement())
+  guildId       String   @map("guild_id")
+  userId        String   @map("user_id")
+  username      String
+  discriminator String?
+  avatarUrl     String?  @map("avatar_url")
+  joinedAt      DateTime @default(now()) @map("joined_at")
+  isBot         Boolean  @default(false) @map("is_bot")
+
+  @@index([guildId, joinedAt])
+  @@index([userId])
+  @@map("houston_bot_member_join_logs")
+}
+
+model MemberLeaveLog {
+  id           BigInt    @id @default(autoincrement())
+  guildId      String    @map("guild_id")
+  userId       String    @map("user_id")
+  username     String
+  leftAt       DateTime  @default(now()) @map("left_at")
+  memberSince  DateTime? @map("member_since")
+  daysInServer Int?      @map("days_in_server")
+
+  @@index([guildId, leftAt])
+  @@index([userId])
+  @@map("houston_bot_member_leave_logs")
+}
+
+model MessageLog {
+  id              BigInt   @id @default(autoincrement())
+  messageId       String   @unique @map("message_id")
+  guildId         String   @map("guild_id")
+  channelId       String   @map("channel_id")
+  userId          String   @map("user_id")
+  username        String
+  hasAttachments  Boolean  @default(false) @map("has_attachments")
+  attachmentCount Int      @default(0) @map("attachment_count")
+  hasLinks        Boolean  @default(false) @map("has_links")
+  linkCount       Int      @default(0) @map("link_count")
+  hasMentions     Boolean  @default(false) @map("has_mentions")
+  mentionCount    Int      @default(0) @map("mention_count")
+  characterCount  Int      @default(0) @map("character_count")
+  wordCount       Int      @default(0) @map("word_count")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([guildId, channelId, createdAt])
+  @@index([guildId, createdAt])
+  @@index([userId, createdAt])
+  @@map("houston_bot_message_logs")
+}
+
+model ModerationBan {
+  id           BigInt    @id @default(autoincrement())
+  guildId      String    @map("guild_id")
+  userId       String    @map("user_id")
+  username     String
+  moderatorId  String?   @map("moderator_id")
+  moderatorTag String?   @map("moderator_tag")
+  reason       String
+  permanent    Boolean   @default(true)
+  bannedAt     DateTime  @default(now()) @map("banned_at")
+  revokedAt    DateTime? @map("revoked_at")
+  revokedById  String?   @map("revoked_by_id")
+
+  @@index([guildId, bannedAt])
+  @@index([guildId, userId, revokedAt])
+  @@index([userId])
+  @@map("houston_bot_moderation_bans")
+}
+
+model ModerationTimeout {
+  id           BigInt    @id @default(autoincrement())
+  guildId      String    @map("guild_id")
+  userId       String    @map("user_id")
+  username     String
+  moderatorId  String?   @map("moderator_id")
+  moderatorTag String?   @map("moderator_tag")
+  reason       String
+  duration     Int
+  expiresAt    DateTime  @map("expires_at")
+  appliedAt    DateTime  @default(now()) @map("applied_at")
+  revokedAt    DateTime? @map("revoked_at")
+  revokedById  String?   @map("revoked_by_id")
+
+  @@index([guildId, appliedAt])
+  @@index([guildId, expiresAt])
+  @@index([userId])
+  @@map("houston_bot_moderation_timeouts")
+}
+
+model ReactionLog {
+  id        BigInt   @id @default(autoincrement())
+  messageId String   @map("message_id")
+  guildId   String   @map("guild_id")
+  channelId String   @map("channel_id")
+  userId    String   @map("user_id")
+  username  String
+  emoji     String
+  emojiName String?  @map("emoji_name")
+  isCustom  Boolean  @default(false) @map("is_custom")
+  addedAt   DateTime @default(now()) @map("added_at")
+
+  @@index([guildId, channelId, addedAt])
+  @@index([messageId])
+  @@index([userId, addedAt])
+  @@map("houston_bot_reaction_logs")
+}
+
 model ScheduledMessage {
   id             BigInt        @id @default(autoincrement())
   createdAt      DateTime      @default(now()) @map("created_at")
@@ -28,7 +151,26 @@ model ScheduledMessage {
   @@map("houston_bot_scheduled_messages")
 }
 
-// Enum para o status das mensagens, garantindo consistência
+model VoiceActivityLog {
+  id           BigInt    @id @default(autoincrement())
+  guildId      String    @map("guild_id")
+  channelId    String    @map("channel_id")
+  userId       String    @map("user_id")
+  username     String
+  joinedAt     DateTime  @map("joined_at")
+  leftAt       DateTime? @map("left_at")
+  durationSec  Int?      @map("duration_sec")
+  wasMuted     Boolean   @default(false) @map("was_muted")
+  wasDeafened  Boolean   @default(false) @map("was_deafened")
+  wasStreaming Boolean   @default(false) @map("was_streaming")
+  wasVideo     Boolean   @default(false) @map("was_video")
+
+  @@index([guildId, channelId, joinedAt])
+  @@index([guildId, leftAt])
+  @@index([userId, joinedAt])
+  @@map("houston_bot_voice_activity_logs")
+}
+
 enum MessageStatus {
   PENDING
   SENT
