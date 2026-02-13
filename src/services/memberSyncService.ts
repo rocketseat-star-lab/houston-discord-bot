@@ -1,16 +1,16 @@
 /**
- * Serviço otimizado de sincronização de membros
- * Combina paginação do Discord com batch inserts do Prisma
+ * Serviço de sincronização de membros
+ * Usa chunking automático do Discord.js + batch inserts
  */
 
-import { Client } from 'discord.js';
+import { Client, GuildMember } from 'discord.js';
 import prisma from '../services/prisma';
 
 const BATCH_SIZE = 750; // Tamanho do batch para inserir no banco
-const FETCH_LIMIT = 1000; // Limite por fetch do Discord
 
 /**
- * Sincroniza membros de UMA guild usando paginação e batch inserts
+ * Sincroniza membros de UMA guild
+ * Discord.js faz chunking automático internamente via Gateway
  */
 async function syncGuildMembers(client: Client<true>, guildId: string): Promise<number> {
   const guild = client.guilds.cache.get(guildId);
@@ -20,84 +20,77 @@ async function syncGuildMembers(client: Client<true>, guildId: string): Promise<
   }
 
   console.log(`[MemberSync] 📊 Iniciando ${guild.name} (${guild.memberCount} membros)`);
-
-  let totalSynced = 0;
-  let after: string | undefined = undefined;
+  const startTime = Date.now();
 
   try {
-    while (true) {
-      // Fetch paginado do Discord
-      const members = await guild.members.fetch({ limit: FETCH_LIMIT, after });
+    // Fetch TODOS os membros de uma vez
+    // Discord.js faz chunking automático via Gateway
+    console.log(`[MemberSync] 📥 Fetching membros de ${guild.name}...`);
+    const membersCollection = await guild.members.fetch();
 
-      if (members.size === 0) break;
+    const membersArray = Array.from(membersCollection.values());
+    console.log(`[MemberSync] ✅ ${membersArray.length} membros fetched`);
 
-      console.log(`[MemberSync] 📥 Fetched ${members.size} membros de ${guild.name}`);
+    let totalSynced = 0;
 
-      // Processar em batches menores para inserção no banco
-      const membersArray = Array.from(members.values());
+    // Processar em batches para inserção no banco
+    for (let i = 0; i < membersArray.length; i += BATCH_SIZE) {
+      const batchMembers = membersArray.slice(i, i + BATCH_SIZE);
 
-      for (let i = 0; i < membersArray.length; i += BATCH_SIZE) {
-        const batchMembers = membersArray.slice(i, i + BATCH_SIZE);
+      const memberData = batchMembers.map((member: GuildMember) => ({
+        guildId: guild.id,
+        userId: member.user.id,
+        username: member.user.username,
+        tag: member.user.tag,
+        displayName: member.displayName,
+        avatarUrl: member.user.displayAvatarURL({ size: 256 }),
+        isBot: member.user.bot,
+        joinedAt: member.joinedAt || new Date(),
+      }));
 
-        const memberData = batchMembers.map((member) => ({
-          guildId: guild.id,
-          userId: member.user.id,
-          username: member.user.username,
-          tag: member.user.tag,
-          displayName: member.displayName,
-          avatarUrl: member.user.displayAvatarURL({ size: 256 }),
-          isBot: member.user.bot,
-          joinedAt: member.joinedAt || new Date(),
-        }));
+      // Batch insert com createMany (muito mais rápido que upserts)
+      try {
+        await prisma.currentMember.createMany({
+          data: memberData,
+          skipDuplicates: true, // Ignora duplicatas
+        });
 
-        // Batch insert com createMany (muito mais rápido que upserts individuais)
-        try {
-          await prisma.currentMember.createMany({
-            data: memberData,
-            skipDuplicates: true, // Ignora membros que já existem
-          });
-
-          totalSynced += batchMembers.length;
-          console.log(`[MemberSync] 💾 Salvos ${totalSynced}/${guild.memberCount} membros`);
-        } catch (error) {
-          console.error(`[MemberSync] ❌ Erro ao salvar batch:`, error);
-        }
+        totalSynced += batchMembers.length;
+        const progress = ((totalSynced / membersArray.length) * 100).toFixed(1);
+        console.log(`[MemberSync] 💾 ${progress}% - ${totalSynced}/${membersArray.length} membros salvos`);
+      } catch (error) {
+        console.error(`[MemberSync] ❌ Erro ao salvar batch:`, error);
       }
-
-      // Preparar próximo fetch
-      const lastMemberId = Array.from(members.keys()).pop();
-      if (!lastMemberId || members.size < FETCH_LIMIT) break;
-
-      after = lastMemberId;
-
-      // Pequeno delay para evitar rate limit
-      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    console.log(`[MemberSync] ✅ ${guild.name}: ${totalSynced} membros sincronizados`);
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[MemberSync] ✅ ${guild.name}: ${totalSynced} membros em ${duration}s`);
     return totalSynced;
 
   } catch (error: any) {
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
     if (error.name === 'GatewayRateLimitError') {
-      console.error(`[MemberSync] ❌ Rate limit em ${guild.name}: aguardar ${error.data?.retry_after}s`);
+      console.error(`[MemberSync] ❌ Rate limit em ${guild.name} após ${duration}s`);
+      console.error(`[MemberSync] ⏸️  Retry after ${error.data?.retry_after}s`);
     } else {
-      console.error(`[MemberSync] ❌ Erro em ${guild.name}:`, error);
+      console.error(`[MemberSync] ❌ Erro em ${guild.name} após ${duration}s:`, error);
     }
-    return totalSynced;
+    return 0;
   }
 }
 
 /**
- * Sincroniza TODAS as guilds do bot
+ * Sincroniza TODAS as guilds do bot de forma assíncrona
+ * Não bloqueia a inicialização do bot
  */
 export async function syncAllGuildMembers(client: Client<true>) {
-  console.log('[MemberSync] 🚀 Iniciando sincronização de todas as guilds...');
+  console.log('[MemberSync] 🚀 Sincronização iniciada em background...');
 
   const guilds = Array.from(client.guilds.cache.values());
   console.log(`[MemberSync] Total de guilds: ${guilds.length}`);
 
   for (const guild of guilds) {
-    // NÃO pular guilds grandes - processar todas com paginação
     await syncGuildMembers(client, guild.id);
 
     // Delay entre guilds para evitar sobrecarga
