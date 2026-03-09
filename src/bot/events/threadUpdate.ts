@@ -3,6 +3,7 @@ import { extractThreadContent, combineForEmbedding, combineForEmbeddingSummary }
 import { analyzeThreadForSolution, summarizeThread } from "../../services/reports/aiService";
 import { createReport, updateReportSolution, reportExists } from "../../services/reports/reportService";
 import { createReportEmbedding } from "../../services/reports/embeddingService";
+import { confirmDocumentation } from "../../services/reports/discordService";
 import { ReportCategory } from "@prisma/client";
 
 const CHECKMARK_EMOJI = "✅";
@@ -93,11 +94,8 @@ export default {
         await createReportEmbedding(report.id, embeddingText);
         console.log(`[ThreadUpdate] Stored embedding for report ${report.id}`);
 
-        const starterMessage = await newThread.fetchStarterMessage();
-        if (starterMessage) {
-          await starterMessage.react(CHECKMARK_EMOJI);
-          console.log(`[ThreadUpdate] Added checkmark reaction`);
-        }
+        await confirmDocumentation(newThread);
+        console.log(`[ThreadUpdate] Added checkmark reaction`);
       }
     } catch (error) {
       console.error(`[ThreadUpdate] Error processing thread ${newThread.id}:`, error);

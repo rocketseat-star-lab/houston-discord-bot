@@ -1,6 +1,7 @@
 import { Events, ThreadChannel } from "discord.js";
 import { extractThreadContent, combineForEmbedding } from "../../services/reports/utils/textExtractor";
 import { findSimilarReports } from "../../services/reports/embeddingService";
+import { sendSimilarReportsSuggestion, sendNoSimilarReportsMessage } from "../../services/reports/discordService";
 
 const THREAD_CREATE_DELAY = 2000;
 const REPORT_FORUM_CHANNEL_ID = process.env.REPORT_FORUM_CHANNEL_ID;
@@ -20,17 +21,16 @@ export default {
       const content = await extractThreadContent(thread);
       const combinedText = combineForEmbedding(content.title, content.description);
 
-      console.log(`[ThreadCreate] Searching similar reports for: ${combinedText.substring(0, 100)}...`);
+      console.log(`[ThreadCreate] Searching similar reports...`);
 
       const similarReports = await findSimilarReports(combinedText, thread.id);
 
       if (similarReports.length > 0) {
-        console.log(`[ThreadCreate] Found ${similarReports.length} similar reports:`);
-        similarReports.forEach((report, i) => {
-          console.log(`  ${i + 1}. ${report.title} (${(report.similarity * 100).toFixed(1)}% similar)`);
-        });
+        console.log(`[ThreadCreate] Found ${similarReports.length} similar reports, sending suggestion...`);
+        await sendSimilarReportsSuggestion(thread, similarReports);
       } else {
-        console.log(`[ThreadCreate] No similar reports found`);
+        console.log(`[ThreadCreate] No similar reports found, sending message...`);
+        await sendNoSimilarReportsMessage(thread);
       }
 
     } catch (error) {
