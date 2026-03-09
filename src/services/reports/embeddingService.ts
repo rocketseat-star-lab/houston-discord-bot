@@ -6,6 +6,10 @@ const SIMILARITY_THRESHOLD = parseFloat(
 );
 const MAX_SIMILAR_REPORTS = parseInt(process.env.MAX_SIMILAR_REPORTS || "10");
 
+// Weight for hybrid search: 70% semantic (vector) + 30% keyword (full-text)
+const VECTOR_WEIGHT = 0.7;
+const KEYWORD_WEIGHT = 0.3;
+
 export interface SimilarReport {
   id: bigint;
   discordThreadId: string;
@@ -41,7 +45,13 @@ export async function findSimilarReports(
   const embedding = await generateEmbedding(text);
   const embeddingString = `[${embedding.join(",")}]`;
 
-  const reports = await prisma.$queryRaw<SimilarReport[]>`
+  // Hybrid search: combine vector similarity with keyword search
+  interface RawReport extends SimilarReport {
+    vectorScore: number;
+    keywordScore: number;
+  }
+
+  const rawReports = await prisma.$queryRaw<RawReport[]>`
     SELECT 
       r.id,
       r.discord_thread_id as "discordThreadId",
@@ -52,14 +62,27 @@ export async function findSimilarReports(
       r.category,
       r.resolved_at as "resolvedAt",
       r.created_at as "createdAt",
-      1 - (e.embedding <=> ${embeddingString}::vector) as similarity
+      (1 - (e.embedding <=> ${embeddingString}::vector)) as "vectorScore",
+      COALESCE(ts_rank(r.search_vector, plainto_tsquery('portuguese', ${text})), 0) as "keywordScore",
+      (
+        ${VECTOR_WEIGHT}::float * (1 - (e.embedding <=> ${embeddingString}::vector)) +
+        ${KEYWORD_WEIGHT}::float * COALESCE(ts_rank(r.search_vector, plainto_tsquery('portuguese', ${text})), 0)
+      ) as similarity
     FROM houston_bot_reports r
     JOIN houston_bot_report_embeddings e ON e.report_id = r.id
-    WHERE 1 - (e.embedding <=> ${embeddingString}::vector) > ${SIMILARITY_THRESHOLD}
-      AND r.discord_thread_id != ${excludeThreadId || ""}
+    WHERE 
+      r.discord_thread_id != ${excludeThreadId || ""}
+      AND r.solution IS NOT NULL
     ORDER BY similarity DESC
     LIMIT ${MAX_SIMILAR_REPORTS}
   `;
+
+  // Filter by threshold
+  const reports = rawReports.filter(
+    (report) => report.vectorScore > SIMILARITY_THRESHOLD
+  );
+
+  console.log(`[EmbeddingService] ${reports.length} reports passed similarity threshold (${SIMILARITY_THRESHOLD})`);
 
   return reports;
 }

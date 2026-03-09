@@ -82,6 +82,7 @@ model Report {
   category        ReportCategory?
   resolvedAt      DateTime?         @map("resolved_at")
   createdAt       DateTime          @default(now()) @map("created_at")
+  searchVector    Unsupported("tsvector")? @map("search_vector")
   embeddings      ReportEmbedding[]
 
   @@index([createdAt])
@@ -93,7 +94,7 @@ model ReportEmbedding {
   id        BigInt   @id @default(autoincrement())
   reportId  BigInt   @unique @map("report_id")
   report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  embedding Unsupported("vector(1536)")
+  embedding Unsupported("vector(3072)")
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([reportId])

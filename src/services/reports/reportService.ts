@@ -24,6 +24,13 @@ export async function createReport(data: CreateReportInput) {
     },
   });
 
+  // Update search_vector for full-text search
+  await prisma.$executeRaw`
+    UPDATE houston_bot_reports
+    SET search_vector = to_tsvector('portuguese', ${data.title} || ' ' || ${data.description})
+    WHERE id = ${report.id}
+  `;
+
   return report;
 }
 
@@ -42,6 +49,13 @@ export async function updateReportSolution(
       resolvedAt: new Date(),
     },
   });
+
+  // Update search_vector in case title/description changed
+  await prisma.$executeRaw`
+    UPDATE houston_bot_reports
+    SET search_vector = to_tsvector('portuguese', title || ' ' || description)
+    WHERE discord_thread_id = ${threadId}
+  `;
 
   return report;
 }
