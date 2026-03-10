@@ -12,8 +12,11 @@ export async function sendSimilarReportsSuggestion(
     .setDescription("Encontrei reports que podem ajudar com seu problema:")
     .setColor(0x5865F2);
 
+  // Limit to top 3 reports to avoid Discord embed field character limit (1024 chars)
+  const topReports = reports.slice(0, 3);
+
   let reportsText = "";
-  reports.forEach((report, index) => {
+  topReports.forEach((report, index) => {
     const status = report.solution ? "✅ Resolvido" : "⏳ Em aberto";
     const similarity = Math.round(report.similarity * 100);
     const link = `https://discord.com/channels/${thread.guildId}/${report.discordThreadId}`;
