@@ -79,7 +79,7 @@ export async function findSimilarReports(
 
   // Filter by threshold
   const reports = rawReports.filter(
-    (report) => report.vectorScore > SIMILARITY_THRESHOLD
+    (report) => report.similarity > SIMILARITY_THRESHOLD
   );
 
   console.log(`[EmbeddingService] ${reports.length} reports passed similarity threshold (${SIMILARITY_THRESHOLD})`);

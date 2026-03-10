@@ -19,16 +19,16 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 export async function analyzeThreadForSolution(
   threadMessages: string
 ): Promise<ThreadAnalysis> {
-  const prompt = `Analyze this Discord support thread and extract the following information:
+  const prompt = `Analise esta thread de suporte do Discord e extraia as seguintes informações EM PORTUGUÊS:
 
-1. **Problem**: What issue was reported? (2-3 sentences max)
-2. **Solution**: How was it resolved? If not resolved, state "Not resolved" (2-3 sentences max)
-3. **Category**: Classify as one of: "bug", "config", or "other"
+1. **Problem**: Qual problema foi relatado? (2-3 frases no máximo, em português)
+2. **Solution**: Como foi resolvido? Se não foi resolvido, escreva "Não resolvido" (2-3 frases no máximo, em português)
+3. **Category**: Classifique como: "bug", "config", ou "other"
 
-Thread messages:
+Mensagens da thread:
 ${threadMessages}
 
-Respond ONLY with a JSON object in this exact format:
+Responda APENAS com um objeto JSON neste formato exato (com os textos em português):
 {
   "problem": "...",
   "solution": "...",
@@ -57,18 +57,46 @@ Respond ONLY with a JSON object in this exact format:
 }
 
 export async function summarizeThread(threadMessages: string): Promise<string> {
-  const prompt = `Create a concise summary of this Discord support thread FOCUSING ONLY on the PROBLEM DESCRIPTION (what did the user describe?) in 2-3 sentences.
+  const prompt = `Crie um resumo conciso desta thread de suporte do Discord focando APENAS na DESCRIÇÃO DO PROBLEMA (o que o usuário descreveu?) em 2-3 frases, EM PORTUGUÊS.
 
-Do NOT mention solution specifics like database, API, connection pool, cache, code changes, deployment details, or other technical implementation details. Focus on the functional issue from the user's perspective without technical jargon.
+IMPORTANTE: Inclua detalhes técnicos específicos que ajudam a identificar o problema:
+- Nomes de features, telas, ou áreas do produto afetadas
+- Códigos de erro, mensagens de erro, ou sintomas específicos
+- Termos técnicos relevantes ao problema (APIs, serviços, componentes, etc.)
+- Contexto sobre o que o usuário estava tentando fazer
 
-Thread messages:
+NÃO mencione detalhes da solução como o problema foi corrigido, mudanças de código, ou detalhes de deploy. Foque em O QUE deu errado, não em COMO foi resolvido.
+
+Mensagens da thread:
 ${threadMessages}
 
-Respond ONLY with the summary text focusing on PROBLEM/ISSUE not solution.`;
+Responda APENAS com o texto do resumo focando no PROBLEMA/ISSUE, não na solução. Resposta em português.`;
 
   const { text } = await generateText({
     model: openai("gpt-4-turbo-preview"),
     temperature: 0.3,
+    prompt,
+  });
+
+  return text.trim();
+}
+
+export async function summarizeQuery(queryText: string): Promise<string> {
+  const prompt = `Extraia a descrição central do problema deste report do usuário em 1-2 frases, EM PORTUGUÊS.
+
+Foque em:
+- Qual issue ou erro específico está sendo reportado
+- Inclua quaisquer termos técnicos, nomes de features, mensagens de erro mencionadas
+- Remova saudações, formalidades e contexto irrelevante
+
+Texto do usuário:
+${queryText}
+
+Responda APENAS com a descrição do problema extraída. Resposta em português.`;
+
+  const { text } = await generateText({
+    model: openai("gpt-4o-mini"),
+    temperature: 0.2,
     prompt,
   });
 

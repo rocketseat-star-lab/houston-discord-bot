@@ -2,6 +2,7 @@ import { Events, ThreadChannel } from "discord.js";
 import { extractThreadContent, combineForEmbedding } from "../../services/reports/utils/textExtractor";
 import { findSimilarReports } from "../../services/reports/embeddingService";
 import { sendSimilarReportsSuggestion, sendNoSimilarReportsMessage } from "../../services/reports/discordService";
+import { summarizeQuery } from "../../services/reports/aiService";
 
 const THREAD_CREATE_DELAY = 2000;
 const REPORT_FORUM_CHANNEL_ID = process.env.REPORT_FORUM_CHANNEL_ID;
@@ -23,7 +24,9 @@ export default {
 
       console.log(`[ThreadCreate] Searching similar reports...`);
 
-      const similarReports = await findSimilarReports(combinedText, thread.id);
+      const searchText = combinedText;
+
+      const similarReports = await findSimilarReports(searchText, thread.id);
 
       if (similarReports.length > 0) {
         console.log(`[ThreadCreate] Found ${similarReports.length} similar reports, sending suggestion...`);
