@@ -1,11 +1,13 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgvector(map: "vector")]
 }
 
 model ModerationBan {
@@ -68,4 +70,39 @@ enum MessageStatus {
   SENT
   ERROR_SENDING
   ERROR_CHANNEL_NOT_FOUND
+}
+
+model Report {
+  id              BigInt            @id @default(autoincrement())
+  discordThreadId String            @unique @map("discord_thread_id")
+  discordUserId   String            @map("discord_user_id")
+  title           String
+  description     String
+  solution        String?
+  category        ReportCategory?
+  resolvedAt      DateTime?         @map("resolved_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  searchVector    Unsupported("tsvector")? @map("search_vector")
+  embeddings      ReportEmbedding[]
+
+  @@index([createdAt])
+  @@index([discordThreadId])
+  @@map("houston_bot_reports")
+}
+
+model ReportEmbedding {
+  id        BigInt   @id @default(autoincrement())
+  reportId  BigInt   @unique @map("report_id")
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  embedding Unsupported("vector(3072)")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([reportId])
+  @@map("houston_bot_report_embeddings")
+}
+
+enum ReportCategory {
+  BUG
+  CONFIG
+  OTHER
 }
