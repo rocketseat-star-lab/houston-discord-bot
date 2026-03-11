@@ -34,6 +34,10 @@ jobs:
         AI_SERVICE_API_KEY=${{ secrets.AI_SERVICE_API_KEY }}
         DATABASE_URL=${{ secrets.DATABASE_URL }}
         DIRECT_URL=${{ secrets.DIRECT_URL }}
+        REPORT_FORUM_CHANNEL_ID=${{ secrets.REPORT_FORUM_CHANNEL_ID }}
+        OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+        SIMILARITY_THRESHOLD=${{ secrets.SIMILARITY_THRESHOLD }}
+        MAX_SIMILAR_REPORTS=${{ secrets.MAX_SIMILAR_REPORTS }}
         INNEREOF
         echo ".env file created successfully"
         EOF
