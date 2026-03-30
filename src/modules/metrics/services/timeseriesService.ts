@@ -137,7 +137,7 @@ export async function getTopChannels(
   from: Date,
   to: Date,
   limit: number,
-): Promise<{ channelId: string; channelName: string | null; count: number }[]> {
+): Promise<{ channelId: string; channelName: string | null; categoryName: string | null; count: number }[]> {
   const grouped = await prisma.metricsMessageEvent.groupBy({
     by: ['channelId'],
     where: { guildId, createdAt: { gte: from, lt: to } },
@@ -147,16 +147,17 @@ export async function getTopChannels(
   });
 
   const channelIds = grouped.map((g) => g.channelId);
-  const channelNames = await prisma.metricsMessageEvent.findMany({
+  const channelInfo = await prisma.metricsMessageEvent.findMany({
     where: { channelId: { in: channelIds } },
-    select: { channelId: true, channelName: true },
+    select: { channelId: true, channelName: true, categoryName: true },
     distinct: ['channelId'],
   });
-  const nameMap = new Map(channelNames.map((c) => [c.channelId, c.channelName]));
+  const infoMap = new Map(channelInfo.map((c) => [c.channelId, { name: c.channelName, category: c.categoryName }]));
 
   return grouped.map((g) => ({
     channelId: g.channelId,
-    channelName: nameMap.get(g.channelId) || null,
+    channelName: infoMap.get(g.channelId)?.name || null,
+    categoryName: infoMap.get(g.channelId)?.category || null,
     count: g._count.channelId,
   }));
 }
@@ -243,15 +244,119 @@ export async function getMemberRetentionDistribution(
 
 export async function getTotalMemberCount(
   guildId: string,
-): Promise<{ total: number; active: number; inactive: number; bots: number }> {
-  const [total, active, inactive, bots] = await Promise.all([
+): Promise<{ total: number; inServer: number; left: number; bots: number }> {
+  const [total, inServer, left, bots] = await Promise.all([
     prisma.metricsMember.count({ where: { guildId } }),
     prisma.metricsMember.count({ where: { guildId, isActive: true, isBot: false } }),
     prisma.metricsMember.count({ where: { guildId, isActive: false } }),
     prisma.metricsMember.count({ where: { guildId, isBot: true } }),
   ]);
 
-  return { total, active, inactive, bots };
+  return { total, inServer, left, bots };
+}
+
+export async function getActiveUsersByPeriod(
+  guildId: string,
+): Promise<{ last30d: number; last90d: number; last180d: number; last365d: number }> {
+  const now = new Date();
+  const d30 = new Date(now.getTime() - 30 * 86400000);
+  const d90 = new Date(now.getTime() - 90 * 86400000);
+  const d180 = new Date(now.getTime() - 180 * 86400000);
+  const d365 = new Date(now.getTime() - 365 * 86400000);
+
+  async function countActiveUsers(since: Date): Promise<number> {
+    const [msgUsers, reactionUsers, voiceUsers] = await Promise.all([
+      prisma.metricsMessageEvent.findMany({
+        where: { guildId, createdAt: { gte: since } },
+        select: { userId: true },
+        distinct: ['userId'],
+      }),
+      prisma.metricsReactionEvent.findMany({
+        where: { guildId, createdAt: { gte: since } },
+        select: { userId: true },
+        distinct: ['userId'],
+      }),
+      prisma.metricsCompletedVoiceSession.findMany({
+        where: { guildId, leaveTimestamp: { gte: since } },
+        select: { userId: true },
+        distinct: ['userId'],
+      }),
+    ]);
+
+    const uniqueIds = new Set<string>();
+    for (const u of msgUsers) uniqueIds.add(u.userId);
+    for (const u of reactionUsers) uniqueIds.add(u.userId);
+    for (const u of voiceUsers) uniqueIds.add(u.userId);
+    return uniqueIds.size;
+  }
+
+  const [last30d, last90d, last180d, last365d] = await Promise.all([
+    countActiveUsers(d30),
+    countActiveUsers(d90),
+    countActiveUsers(d180),
+    countActiveUsers(d365),
+  ]);
+
+  return { last30d, last90d, last180d, last365d };
+}
+
+export async function getDailyRetention(
+  guildId: string,
+  from: Date,
+  to: Date,
+): Promise<{ date: string; retained: number; left: number }[]> {
+  const members = await prisma.metricsMember.findMany({
+    where: { guildId, joinedAt: { gte: from, lt: to } },
+    select: { joinedAt: true, isActive: true, leftAt: true },
+  });
+
+  const retainedByDay = new Map<string, number>();
+  const leftByDay = new Map<string, number>();
+
+  for (const m of members) {
+    const key = m.joinedAt.toISOString().split('T')[0];
+    if (m.isActive) {
+      retainedByDay.set(key, (retainedByDay.get(key) || 0) + 1);
+    } else {
+      leftByDay.set(key, (leftByDay.get(key) || 0) + 1);
+    }
+  }
+
+  const dates = generateDateRange(from, to);
+  return dates.map((date) => ({
+    date,
+    retained: retainedByDay.get(date) || 0,
+    left: leftByDay.get(date) || 0,
+  }));
+}
+
+export async function getTopReactionChannels(
+  guildId: string,
+  from: Date,
+  to: Date,
+  limit: number,
+): Promise<{ channelId: string; channelName: string | null; count: number }[]> {
+  const grouped = await prisma.metricsReactionEvent.groupBy({
+    by: ['channelId'],
+    where: { guildId, eventType: 'added', createdAt: { gte: from, lt: to } },
+    _count: { channelId: true },
+    orderBy: { _count: { channelId: 'desc' } },
+    take: limit,
+  });
+
+  const channelIds = grouped.map((g) => g.channelId);
+  const channelNames = await prisma.metricsMessageEvent.findMany({
+    where: { channelId: { in: channelIds } },
+    select: { channelId: true, channelName: true },
+    distinct: ['channelId'],
+  });
+  const nameMap = new Map(channelNames.map((c) => [c.channelId, c.channelName]));
+
+  return grouped.map((g) => ({
+    channelId: g.channelId,
+    channelName: nameMap.get(g.channelId) || null,
+    count: g._count.channelId,
+  }));
 }
 
 export async function getTopMessageSenders(

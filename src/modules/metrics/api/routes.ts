@@ -20,5 +20,8 @@ router.get('/total-members/:guildId', controller.getTotalMembers);
 router.get('/top-senders/:guildId', controller.getTopSenders);
 router.get('/top-reactors/:guildId', controller.getTopReactors);
 router.get('/top-voice-users/:guildId', controller.getTopVoiceUsersByRange);
+router.get('/active-users/:guildId', controller.getActiveUsers);
+router.get('/daily-retention/:guildId', controller.getRetention);
+router.get('/reaction-channels/:guildId', controller.getReactionChannels);
 
 export default router;

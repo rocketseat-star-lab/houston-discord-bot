@@ -33,6 +33,7 @@ CREATE TABLE "metrics_message_events" (
     "user_id" TEXT NOT NULL,
     "channel_id" TEXT NOT NULL,
     "channel_name" TEXT,
+    "category_name" TEXT,
     "content_length" INTEGER,
     "has_embed" BOOLEAN NOT NULL DEFAULT false,
     "has_attachment" BOOLEAN NOT NULL DEFAULT false,

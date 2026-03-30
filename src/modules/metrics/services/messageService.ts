@@ -7,6 +7,7 @@ interface RecordMessageData {
   userId: string;
   channelId: string;
   channelName?: string | null;
+  categoryName?: string | null;
   contentLength?: number | null;
   hasEmbed: boolean;
   hasAttachment: boolean;
@@ -23,6 +24,7 @@ export async function recordMessage(data: RecordMessageData): Promise<void> {
         userId: data.userId,
         channelId: data.channelId,
         channelName: data.channelName ?? null,
+        categoryName: data.categoryName ?? null,
         contentLength: data.contentLength ?? null,
         hasEmbed: data.hasEmbed,
         hasAttachment: data.hasAttachment,

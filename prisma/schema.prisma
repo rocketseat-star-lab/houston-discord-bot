@@ -148,6 +148,7 @@ model MetricsMessageEvent {
   userId        String   @map("user_id")
   channelId     String   @map("channel_id")
   channelName   String?  @map("channel_name")
+  categoryName  String?  @map("category_name")
   contentLength Int?     @map("content_length")
   hasEmbed      Boolean  @default(false) @map("has_embed")
   hasAttachment Boolean  @default(false) @map("has_attachment")

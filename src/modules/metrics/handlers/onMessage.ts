@@ -21,6 +21,7 @@ export async function onMessage(message: Message): Promise<void> {
       userId: message.author.id,
       channelId: message.channel.id,
       channelName: 'name' in message.channel ? message.channel.name : null,
+      categoryName: 'parent' in message.channel ? message.channel.parent?.name ?? null : null,
       contentLength: message.content?.length || 0,
       hasEmbed: message.embeds.length > 0,
       hasAttachment: message.attachments.size > 0,
