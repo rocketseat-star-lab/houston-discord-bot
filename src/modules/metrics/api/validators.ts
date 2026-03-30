@@ -32,3 +32,12 @@ export const generateReportSchema = z.object({
 export const snapshotsQuerySchema = paginationQuerySchema.extend({
   type: z.enum(['daily', 'weekly', 'monthly']).optional(),
 });
+
+export const dateRangeQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+});
+
+export const topChannelsQuerySchema = dateRangeQuerySchema.extend({
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});

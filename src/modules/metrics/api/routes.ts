@@ -12,5 +12,10 @@ router.get('/voice/:guildId', controller.getVoice);
 router.get('/reports/:guildId', controller.getReport);
 router.post('/reports/:guildId/generate', controller.generateReport);
 router.get('/snapshots/:guildId', controller.getSnapshots);
+router.get('/timeseries/:guildId/:metric', controller.getTimeseries);
+router.get('/channels/:guildId', controller.getChannelRanking);
+router.get('/voice-channels/:guildId', controller.getVoiceChannelRanking);
+router.get('/retention/:guildId', controller.getRetentionDistribution);
+router.get('/total-members/:guildId', controller.getTotalMembers);
 
 export default router;

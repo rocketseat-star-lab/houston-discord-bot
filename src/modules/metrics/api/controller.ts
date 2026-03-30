@@ -13,9 +13,21 @@ import {
   generateReportSchema,
   paginationQuerySchema,
   snapshotsQuerySchema,
+  dateRangeQuerySchema,
+  topChannelsQuerySchema,
 } from './validators';
 import { METRICS_CONFIG } from '../config';
 import { saveReportSnapshot, getReportSnapshots } from '../services/snapshotService';
+import {
+  getDailyMemberActivity,
+  getDailyMessageActivity,
+  getDailyReactionActivity,
+  getDailyVoiceActivity,
+  getTopChannels,
+  getTopVoiceChannels,
+  getMemberRetentionDistribution,
+  getTotalMemberCount,
+} from '../services/timeseriesService';
 
 function getDateFromQuery(dateStr?: string): Date {
   return dateStr ? new Date(dateStr) : new Date();
@@ -251,6 +263,128 @@ export async function getSnapshots(req: Request, res: Response): Promise<void> {
     res.json(result);
   } catch (error) {
     console.error('[metrics/api] Error in getSnapshots:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getTimeseries(req: Request, res: Response): Promise<void> {
+  try {
+    const { guildId, metric } = req.params;
+
+    if (!isGuildAllowed(guildId)) {
+      res.status(403).json({ error: 'Guild not allowed' });
+      return;
+    }
+
+    const validMetrics = ['members', 'messages', 'reactions', 'voice'];
+    if (!validMetrics.includes(metric)) {
+      res.status(400).json({ error: `Invalid metric. Must be one of: ${validMetrics.join(', ')}` });
+      return;
+    }
+
+    const query = dateRangeQuerySchema.parse(req.query);
+    const from = new Date(query.from);
+    const to = new Date(query.to);
+
+    let data;
+    switch (metric) {
+      case 'members':
+        data = await getDailyMemberActivity(guildId, from, to);
+        break;
+      case 'messages':
+        data = await getDailyMessageActivity(guildId, from, to);
+        break;
+      case 'reactions':
+        data = await getDailyReactionActivity(guildId, from, to);
+        break;
+      case 'voice':
+        data = await getDailyVoiceActivity(guildId, from, to);
+        break;
+    }
+
+    res.json({ metric, from: query.from, to: query.to, data });
+  } catch (error) {
+    console.error('[metrics/api] Error in getTimeseries:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getChannelRanking(req: Request, res: Response): Promise<void> {
+  try {
+    const { guildId } = req.params;
+
+    if (!isGuildAllowed(guildId)) {
+      res.status(403).json({ error: 'Guild not allowed' });
+      return;
+    }
+
+    const query = topChannelsQuerySchema.parse(req.query);
+    const from = new Date(query.from);
+    const to = new Date(query.to);
+
+    const data = await getTopChannels(guildId, from, to, query.limit);
+
+    res.json({ data });
+  } catch (error) {
+    console.error('[metrics/api] Error in getChannelRanking:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getVoiceChannelRanking(req: Request, res: Response): Promise<void> {
+  try {
+    const { guildId } = req.params;
+
+    if (!isGuildAllowed(guildId)) {
+      res.status(403).json({ error: 'Guild not allowed' });
+      return;
+    }
+
+    const query = topChannelsQuerySchema.parse(req.query);
+    const from = new Date(query.from);
+    const to = new Date(query.to);
+
+    const data = await getTopVoiceChannels(guildId, from, to, query.limit);
+
+    res.json({ data });
+  } catch (error) {
+    console.error('[metrics/api] Error in getVoiceChannelRanking:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getRetentionDistribution(req: Request, res: Response): Promise<void> {
+  try {
+    const { guildId } = req.params;
+
+    if (!isGuildAllowed(guildId)) {
+      res.status(403).json({ error: 'Guild not allowed' });
+      return;
+    }
+
+    const data = await getMemberRetentionDistribution(guildId);
+
+    res.json({ data });
+  } catch (error) {
+    console.error('[metrics/api] Error in getRetentionDistribution:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getTotalMembers(req: Request, res: Response): Promise<void> {
+  try {
+    const { guildId } = req.params;
+
+    if (!isGuildAllowed(guildId)) {
+      res.status(403).json({ error: 'Guild not allowed' });
+      return;
+    }
+
+    const data = await getTotalMemberCount(guildId);
+
+    res.json(data);
+  } catch (error) {
+    console.error('[metrics/api] Error in getTotalMembers:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
