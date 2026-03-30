@@ -167,7 +167,7 @@ export async function getTopVoiceChannels(
   from: Date,
   to: Date,
   limit: number,
-): Promise<{ channelId: string; channelName: string | null; totalSeconds: number }[]> {
+): Promise<{ channelId: string; channelName: string | null; categoryName: string | null; totalSeconds: number }[]> {
   const grouped = await prisma.metricsCompletedVoiceSession.groupBy({
     by: ['channelId'],
     where: { guildId, leaveTimestamp: { gte: from, lt: to } },
@@ -177,18 +177,26 @@ export async function getTopVoiceChannels(
   });
 
   const channelIds = grouped.map((g) => g.channelId);
-  const channelNames = await prisma.metricsVoiceEvent.findMany({
-    where: { channelId: { in: channelIds } },
-    select: { channelId: true, channelName: true },
-    distinct: ['channelId'],
-  });
-  const nameMap = new Map(
-    channelNames.map((c) => [c.channelId, c.channelName]),
-  );
+  // Look up channel names from voice events, and category from message events
+  const [voiceNames, msgInfo] = await Promise.all([
+    prisma.metricsVoiceEvent.findMany({
+      where: { channelId: { in: channelIds } },
+      select: { channelId: true, channelName: true },
+      distinct: ['channelId'],
+    }),
+    prisma.metricsMessageEvent.findMany({
+      where: { channelId: { in: channelIds } },
+      select: { channelId: true, categoryName: true },
+      distinct: ['channelId'],
+    }),
+  ]);
+  const nameMap = new Map(voiceNames.map((c) => [c.channelId, c.channelName]));
+  const catMap = new Map(msgInfo.map((c) => [c.channelId, c.categoryName]));
 
   return grouped.map((g) => ({
     channelId: g.channelId,
     channelName: nameMap.get(g.channelId) || null,
+    categoryName: catMap.get(g.channelId) || null,
     totalSeconds: g._sum.durationSeconds || 0,
   }));
 }
@@ -335,7 +343,7 @@ export async function getTopReactionChannels(
   from: Date,
   to: Date,
   limit: number,
-): Promise<{ channelId: string; channelName: string | null; count: number }[]> {
+): Promise<{ channelId: string; channelName: string | null; categoryName: string | null; count: number }[]> {
   const grouped = await prisma.metricsReactionEvent.groupBy({
     by: ['channelId'],
     where: { guildId, eventType: 'added', createdAt: { gte: from, lt: to } },
@@ -345,16 +353,17 @@ export async function getTopReactionChannels(
   });
 
   const channelIds = grouped.map((g) => g.channelId);
-  const channelNames = await prisma.metricsMessageEvent.findMany({
+  const channelInfo = await prisma.metricsMessageEvent.findMany({
     where: { channelId: { in: channelIds } },
-    select: { channelId: true, channelName: true },
+    select: { channelId: true, channelName: true, categoryName: true },
     distinct: ['channelId'],
   });
-  const nameMap = new Map(channelNames.map((c) => [c.channelId, c.channelName]));
+  const infoMap = new Map(channelInfo.map((c) => [c.channelId, { name: c.channelName, category: c.categoryName }]));
 
   return grouped.map((g) => ({
     channelId: g.channelId,
-    channelName: nameMap.get(g.channelId) || null,
+    channelName: infoMap.get(g.channelId)?.name || null,
+    categoryName: infoMap.get(g.channelId)?.category || null,
     count: g._count.channelId,
   }));
 }
