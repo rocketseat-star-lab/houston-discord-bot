@@ -25,21 +25,32 @@ export async function getDailyMemberActivity(
   from: Date,
   to: Date,
 ): Promise<{ date: string; joins: number; leaves: number }[]> {
-  const [joinEvents, leaveEvents] = await Promise.all([
-    prisma.metricsJoinLeaveEvent.findMany({
-      where: { guildId, eventType: 'join', createdAt: { gte: from, lt: to } },
-      select: { createdAt: true },
+  const [joinedMembers, leftMembers] = await Promise.all([
+    prisma.metricsMember.findMany({
+      where: { guildId, joinedAt: { gte: from, lt: to } },
+      select: { joinedAt: true },
     }),
-    prisma.metricsJoinLeaveEvent.findMany({
-      where: { guildId, eventType: 'leave', createdAt: { gte: from, lt: to } },
-      select: { createdAt: true },
+    prisma.metricsMember.findMany({
+      where: { guildId, isActive: false, leftAt: { gte: from, lt: to } },
+      select: { leftAt: true },
     }),
   ]);
 
-  const joinsByDay = bucketByDay(joinEvents);
-  const leavesByDay = bucketByDay(leaveEvents);
-  const dates = generateDateRange(from, to);
+  const joinsByDay = new Map<string, number>();
+  for (const m of joinedMembers) {
+    const key = m.joinedAt.toISOString().split('T')[0];
+    joinsByDay.set(key, (joinsByDay.get(key) || 0) + 1);
+  }
 
+  const leavesByDay = new Map<string, number>();
+  for (const m of leftMembers) {
+    if (m.leftAt) {
+      const key = m.leftAt.toISOString().split('T')[0];
+      leavesByDay.set(key, (leavesByDay.get(key) || 0) + 1);
+    }
+  }
+
+  const dates = generateDateRange(from, to);
   return dates.map((date) => ({
     date,
     joins: joinsByDay.get(date) || 0,
@@ -73,11 +84,11 @@ export async function getDailyReactionActivity(
 ): Promise<{ date: string; added: number; removed: number }[]> {
   const [addedEvents, removedEvents] = await Promise.all([
     prisma.metricsReactionEvent.findMany({
-      where: { guildId, eventType: 'add', createdAt: { gte: from, lt: to } },
+      where: { guildId, eventType: 'added', createdAt: { gte: from, lt: to } },
       select: { createdAt: true },
     }),
     prisma.metricsReactionEvent.findMany({
-      where: { guildId, eventType: 'remove', createdAt: { gte: from, lt: to } },
+      where: { guildId, eventType: 'removed', createdAt: { gte: from, lt: to } },
       select: { createdAt: true },
     }),
   ]);
