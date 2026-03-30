@@ -27,6 +27,9 @@ import {
   getTopVoiceChannels,
   getMemberRetentionDistribution,
   getTotalMemberCount,
+  getTopMessageSenders,
+  getTopReactionUsers,
+  getTopVoiceUsers,
 } from '../services/timeseriesService';
 
 function getDateFromQuery(dateStr?: string): Date {
@@ -385,6 +388,48 @@ export async function getTotalMembers(req: Request, res: Response): Promise<void
     res.json(data);
   } catch (error) {
     console.error('[metrics/api] Error in getTotalMembers:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getTopSenders(req: Request, res: Response): Promise<void> {
+  try {
+    const { guildId } = req.params;
+    if (!isGuildAllowed(guildId)) { res.status(403).json({ error: 'Guild not allowed' }); return; }
+
+    const query = topChannelsQuerySchema.parse(req.query);
+    const data = await getTopMessageSenders(guildId, new Date(query.from), new Date(query.to), query.limit);
+    res.json({ data });
+  } catch (error) {
+    console.error('[metrics/api] Error in getTopSenders:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getTopReactors(req: Request, res: Response): Promise<void> {
+  try {
+    const { guildId } = req.params;
+    if (!isGuildAllowed(guildId)) { res.status(403).json({ error: 'Guild not allowed' }); return; }
+
+    const query = topChannelsQuerySchema.parse(req.query);
+    const data = await getTopReactionUsers(guildId, new Date(query.from), new Date(query.to), query.limit);
+    res.json({ data });
+  } catch (error) {
+    console.error('[metrics/api] Error in getTopReactors:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function getTopVoiceUsersByRange(req: Request, res: Response): Promise<void> {
+  try {
+    const { guildId } = req.params;
+    if (!isGuildAllowed(guildId)) { res.status(403).json({ error: 'Guild not allowed' }); return; }
+
+    const query = topChannelsQuerySchema.parse(req.query);
+    const data = await getTopVoiceUsers(guildId, new Date(query.from), new Date(query.to), query.limit);
+    res.json({ data });
+  } catch (error) {
+    console.error('[metrics/api] Error in getTopVoiceUsersByRange:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

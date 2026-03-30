@@ -19,6 +19,7 @@ export async function onVoiceState(oldState: VoiceState, newState: VoiceState): 
         guildId,
         userId,
         channelId: newState.channelId!,
+        channelName: newState.channel?.name ?? null,
         sessionId,
         eventType: 'joined_voice_channel',
       });
@@ -32,6 +33,7 @@ export async function onVoiceState(oldState: VoiceState, newState: VoiceState): 
         guildId,
         userId,
         channelId: oldState.channelId!,
+        channelName: oldState.channel?.name ?? null,
         sessionId: leaveSessionId,
         eventType: 'left_voice_channel',
       });
@@ -44,6 +46,7 @@ export async function onVoiceState(oldState: VoiceState, newState: VoiceState): 
         guildId,
         userId,
         channelId: newState.channelId!,
+        channelName: newState.channel?.name ?? null,
         sessionId,
         eventType: 'moved_voice_channel',
       });

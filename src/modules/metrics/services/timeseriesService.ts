@@ -253,3 +253,87 @@ export async function getTotalMemberCount(
 
   return { total, active, inactive, bots };
 }
+
+export async function getTopMessageSenders(
+  guildId: string,
+  from: Date,
+  to: Date,
+  limit: number,
+): Promise<{ userId: string; username: string; count: number }[]> {
+  const grouped = await prisma.metricsMessageEvent.groupBy({
+    by: ['userId'],
+    where: { guildId, createdAt: { gte: from, lt: to } },
+    _count: { userId: true },
+    orderBy: { _count: { userId: 'desc' } },
+    take: limit,
+  });
+
+  const userIds = grouped.map((g) => g.userId);
+  const members = await prisma.metricsMember.findMany({
+    where: { guildId, userId: { in: userIds } },
+    select: { userId: true, username: true },
+  });
+  const nameMap = new Map(members.map((m) => [m.userId, m.username]));
+
+  return grouped.map((g) => ({
+    userId: g.userId,
+    username: nameMap.get(g.userId) ?? g.userId,
+    count: g._count.userId,
+  }));
+}
+
+export async function getTopReactionUsers(
+  guildId: string,
+  from: Date,
+  to: Date,
+  limit: number,
+): Promise<{ userId: string; username: string; count: number }[]> {
+  const grouped = await prisma.metricsReactionEvent.groupBy({
+    by: ['userId'],
+    where: { guildId, eventType: 'added', createdAt: { gte: from, lt: to } },
+    _count: { userId: true },
+    orderBy: { _count: { userId: 'desc' } },
+    take: limit,
+  });
+
+  const userIds = grouped.map((g) => g.userId);
+  const members = await prisma.metricsMember.findMany({
+    where: { guildId, userId: { in: userIds } },
+    select: { userId: true, username: true },
+  });
+  const nameMap = new Map(members.map((m) => [m.userId, m.username]));
+
+  return grouped.map((g) => ({
+    userId: g.userId,
+    username: nameMap.get(g.userId) ?? g.userId,
+    count: g._count.userId,
+  }));
+}
+
+export async function getTopVoiceUsers(
+  guildId: string,
+  from: Date,
+  to: Date,
+  limit: number,
+): Promise<{ userId: string; username: string; totalSeconds: number }[]> {
+  const grouped = await prisma.metricsCompletedVoiceSession.groupBy({
+    by: ['userId'],
+    where: { guildId, leaveTimestamp: { gte: from, lt: to } },
+    _sum: { durationSeconds: true },
+    orderBy: { _sum: { durationSeconds: 'desc' } },
+    take: limit,
+  });
+
+  const userIds = grouped.map((g) => g.userId);
+  const members = await prisma.metricsMember.findMany({
+    where: { guildId, userId: { in: userIds } },
+    select: { userId: true, username: true },
+  });
+  const nameMap = new Map(members.map((m) => [m.userId, m.username]));
+
+  return grouped.map((g) => ({
+    userId: g.userId,
+    username: nameMap.get(g.userId) ?? g.userId,
+    totalSeconds: g._sum.durationSeconds ?? 0,
+  }));
+}
