@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "backfill": "ts-node scripts/backfill-reports.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +19,8 @@
     "ai": "^6.0.116",
     "axios": "^1.11.0",
     "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "discord.js": "^14.21.0",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
@@ -33,6 +35,7 @@
     "prisma": "^6.13.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
   }
 }

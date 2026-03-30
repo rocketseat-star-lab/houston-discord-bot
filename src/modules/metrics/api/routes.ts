@@ -1,0 +1,16 @@
+import { Router } from 'express';
+import * as controller from './controller';
+
+const router = Router();
+
+router.get('/overview/:guildId', controller.getOverview);
+router.get('/members/:guildId', controller.getMembers);
+router.get('/members/:guildId/activity', controller.getMembersActivity);
+router.get('/messages/:guildId', controller.getMessages);
+router.get('/reactions/:guildId', controller.getReactions);
+router.get('/voice/:guildId', controller.getVoice);
+router.get('/reports/:guildId', controller.getReport);
+router.post('/reports/:guildId/generate', controller.generateReport);
+router.get('/snapshots/:guildId', controller.getSnapshots);
+
+export default router;

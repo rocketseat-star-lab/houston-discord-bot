@@ -106,3 +106,126 @@ enum ReportCategory {
   CONFIG
   OTHER
 }
+
+// ========================================
+// MODULE: Discord Metrics
+// ========================================
+
+model MetricsMember {
+  id            Int       @id @default(autoincrement())
+  guildId       String    @map("guild_id")
+  userId        String    @map("user_id")
+  username      String
+  discriminator String?
+  isBot         Boolean   @default(false) @map("is_bot")
+  joinedAt      DateTime  @map("joined_at")
+  leftAt        DateTime? @map("left_at")
+  isActive      Boolean   @default(true) @map("is_active")
+  nickname      String?
+
+  @@unique([guildId, userId])
+  @@index([guildId, isActive])
+  @@index([isActive, leftAt])
+  @@map("metrics_members")
+}
+
+model MetricsJoinLeaveEvent {
+  id        Int      @id @default(autoincrement())
+  guildId   String   @map("guild_id")
+  userId    String   @map("user_id")
+  eventType String   @map("event_type")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([guildId, createdAt])
+  @@index([guildId, userId, createdAt])
+  @@map("metrics_join_leave_events")
+}
+
+model MetricsMessageEvent {
+  id            Int      @id @default(autoincrement())
+  messageId     String   @unique @map("message_id")
+  guildId       String   @map("guild_id")
+  userId        String   @map("user_id")
+  channelId     String   @map("channel_id")
+  channelName   String?  @map("channel_name")
+  contentLength Int?     @map("content_length")
+  hasEmbed      Boolean  @default(false) @map("has_embed")
+  hasAttachment Boolean  @default(false) @map("has_attachment")
+  createdAt     DateTime @map("created_at")
+
+  @@index([guildId, createdAt])
+  @@index([guildId, userId, createdAt])
+  @@map("metrics_message_events")
+}
+
+model MetricsReactionEvent {
+  id        Int      @id @default(autoincrement())
+  messageId String   @map("message_id")
+  guildId   String   @map("guild_id")
+  userId    String   @map("user_id")
+  channelId String   @map("channel_id")
+  emoji     String
+  eventType String   @map("event_type")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([guildId, createdAt])
+  @@index([guildId, userId, createdAt])
+  @@map("metrics_reaction_events")
+}
+
+model MetricsVoiceEvent {
+  id          Int      @id @default(autoincrement())
+  guildId     String   @map("guild_id")
+  userId      String   @map("user_id")
+  channelId   String?  @map("channel_id")
+  channelName String?  @map("channel_name")
+  eventType   String   @map("event_type")
+  sessionId   String?  @map("session_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([guildId, createdAt])
+  @@index([guildId, userId, createdAt])
+  @@map("metrics_voice_events")
+}
+
+model MetricsActiveVoiceSession {
+  guildId          String   @map("guild_id")
+  userId           String   @map("user_id")
+  discordSessionId String   @map("discord_session_id")
+  channelId        String   @map("channel_id")
+  joinTimestamp    DateTime @default(now()) @map("join_timestamp")
+
+  @@id([guildId, userId, discordSessionId])
+  @@map("metrics_active_voice_sessions")
+}
+
+model MetricsCompletedVoiceSession {
+  id               Int      @id @default(autoincrement())
+  guildId          String   @map("guild_id")
+  userId           String   @map("user_id")
+  channelId        String   @map("channel_id")
+  discordSessionId String?  @map("discord_session_id")
+  joinTimestamp    DateTime @map("join_timestamp")
+  leaveTimestamp   DateTime @map("leave_timestamp")
+  durationSeconds  Int      @map("duration_seconds")
+  processedAt      DateTime @default(now()) @map("processed_at")
+
+  @@index([guildId, userId, joinTimestamp])
+  @@index([guildId, joinTimestamp])
+  @@index([leaveTimestamp])
+  @@map("metrics_completed_voice_sessions")
+}
+
+model MetricsReportSnapshot {
+  id          Int      @id @default(autoincrement())
+  guildId     String   @map("guild_id")
+  reportType  String   @map("report_type") // 'daily' | 'weekly' | 'monthly'
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  data        Json
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([guildId, reportType, periodStart])
+  @@index([guildId, reportType, createdAt])
+  @@map("metrics_report_snapshots")
+}
