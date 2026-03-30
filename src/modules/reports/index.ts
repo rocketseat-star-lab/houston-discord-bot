@@ -163,7 +163,7 @@ async function onInteraction(interaction: any): Promise<void> {
 }
 
 export const reportsModule: FeatureModule = {
-  name: 'reports',
+  name: 'forum-threads',
   description: 'Bug report RAG system with similarity search and auto-documentation',
   handlers: {
     threadCreate: onThreadCreate,

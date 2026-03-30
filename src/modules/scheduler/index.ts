@@ -70,7 +70,7 @@ async function processScheduledMessages(): Promise<void> {
 }
 
 export const schedulerModule: FeatureModule = {
-  name: 'scheduler',
+  name: 'messages',
   description: 'Scheduled message delivery system',
   routes: messageRoutes,
   schedulers: [
