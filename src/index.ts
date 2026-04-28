@@ -25,6 +25,7 @@ import { moderationModule } from './modules/moderation/index';
 import { reportsModule } from './modules/reports/index';
 import { schedulerModule } from './modules/scheduler/index';
 import { metricsModule } from './modules/metrics/index';
+import { reputationModule } from './modules/reputation/index';
 
 // --- Module Registry ---
 const modules: FeatureModule[] = [
@@ -33,6 +34,7 @@ const modules: FeatureModule[] = [
   reportsModule,
   schedulerModule,
   metricsModule,
+  reputationModule,
 ];
 
 // --- Discord Client ---
