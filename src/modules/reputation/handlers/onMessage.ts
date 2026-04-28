@@ -19,6 +19,8 @@ export async function onMessage(message: Message): Promise<void> {
         guildId: message.guild.id,
         discordUserId: message.author.id,
         username: message.author.username,
+        globalName: message.author.globalName,
+        avatarUrl: message.author.displayAvatarURL(),
         messageId: message.id,
         contentLength: content.length,
         isInSocialChannel,

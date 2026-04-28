@@ -25,11 +25,15 @@ export async function onVoiceState(oldState: VoiceState, newState: VoiceState): 
       if (!joined) return;
       const minutes = Math.floor((Date.now() - joined) / 60000);
       if (minutes >= 10) {
+        const member = newState.member || oldState.member;
         toolsClient.fireEvent({
           type: 'VOICE_SEGMENT',
           payload: {
             guildId,
             discordUserId: userId,
+            username: member?.user?.username,
+            globalName: member?.user?.globalName,
+            avatarUrl: member?.user?.displayAvatarURL?.(),
             minutesInVoice: minutes,
           },
         });

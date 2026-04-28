@@ -30,11 +30,16 @@ export async function onReactionAdd(
     const targetAuthorId = reaction.message.author?.id;
     if (!targetAuthorId) return;
 
+    const fullUser = user.partial ? await user.fetch().catch(() => null) : user;
+
     toolsClient.fireEvent({
       type: 'REACTION_GIVEN',
       payload: {
         guildId,
         discordUserId: user.id,
+        username: fullUser?.username,
+        globalName: fullUser?.globalName,
+        avatarUrl: fullUser?.displayAvatarURL?.(),
         targetMessageId: reaction.message.id,
         targetAuthorId,
       },
@@ -45,11 +50,15 @@ export async function onReactionAdd(
       if (!u.bot) reactorIds.add(u.id);
     });
     if (reactorIds.size >= REPUTATION_CONFIG.highReactionsThreshold) {
+      const author = reaction.message.author;
       toolsClient.fireEvent({
         type: 'HIGH_REACTIONS',
         payload: {
           guildId,
           discordUserId: targetAuthorId,
+          username: author?.username,
+          globalName: author?.globalName,
+          avatarUrl: author?.displayAvatarURL?.(),
           messageId: reaction.message.id,
           uniqueReactors: reactorIds.size,
         },
