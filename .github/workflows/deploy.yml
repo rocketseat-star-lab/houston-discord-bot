@@ -49,11 +49,56 @@ jobs:
         echo "All required secrets are present."
 
     - name: Setup SSH
+      env:
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
       run: |
+        set +e
         mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+
+        # Write key, then validate format
+        printf '%s\n' "${EC2_SSH_KEY}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+        echo "=== SSH key sanity check ==="
+        echo "First line of key file: $(head -1 ~/.ssh/id_rsa)"
+        echo "Last line of key file:  $(tail -1 ~/.ssh/id_rsa)"
+        echo "Total lines in key file: $(wc -l < ~/.ssh/id_rsa)"
+        if ! ssh-keygen -l -f ~/.ssh/id_rsa > /tmp/keygen_out 2>&1; then
+          echo "::error::EC2_SSH_KEY is malformed. ssh-keygen says:"
+          cat /tmp/keygen_out
+          echo "Common cause: secret was pasted without preserving newlines."
+          exit 1
+        fi
+        echo "SSH key fingerprint: $(cat /tmp/keygen_out)"
+
+        # Host sanity (do not print full host)
+        HOST_LEN=${#EC2_HOST}
+        if [ "$HOST_LEN" -gt 6 ]; then
+          HOST_HINT="$(echo "${EC2_HOST}" | cut -c1-3)***$(echo "${EC2_HOST}" | tail -c4)"
+        else
+          HOST_HINT="(too short)"
+        fi
+        echo "EC2_HOST length: ${HOST_LEN} hint: ${HOST_HINT}"
+
+        echo "=== ssh-keyscan with 15s timeout ==="
+        timeout 15 ssh-keyscan -H "${EC2_HOST}" > /tmp/keyscan_out 2> /tmp/keyscan_err
+        KEYSCAN_RC=$?
+        echo "ssh-keyscan exit code: ${KEYSCAN_RC}"
+        echo "ssh-keyscan stderr:"
+        cat /tmp/keyscan_err
+
+        if [ "$KEYSCAN_RC" -ne 0 ] || [ ! -s /tmp/keyscan_out ]; then
+          echo "::error::ssh-keyscan failed."
+          echo "Likely causes (one of):"
+          echo "  - EC2_HOST is invalid (wrong IP/hostname or stale)"
+          echo "  - EC2 instance is stopped or unreachable"
+          echo "  - Security group blocks port 22 from GitHub Actions IPs"
+          exit 1
+        fi
+
+        cat /tmp/keyscan_out >> ~/.ssh/known_hosts
+        echo "ssh-keyscan returned $(wc -l < /tmp/keyscan_out) host key(s)."
 
     - name: Create .env file
       run: |
