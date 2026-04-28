@@ -11,7 +11,43 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
+    - name: Validate required secrets
+      env:
+        EC2_HOST: ${{ secrets.EC2_HOST }}
+        EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+        INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      run: |
+        missing=()
+        [ -z "${EC2_HOST}" ]          && missing+=("EC2_HOST")
+        [ -z "${EC2_USERNAME}" ]      && missing+=("EC2_USERNAME")
+        [ -z "${EC2_SSH_KEY}" ]       && missing+=("EC2_SSH_KEY")
+        [ -z "${DISCORD_BOT_TOKEN}" ] && missing+=("DISCORD_BOT_TOKEN")
+        [ -z "${INTERNAL_API_KEY}" ]  && missing+=("INTERNAL_API_KEY")
+        [ -z "${DATABASE_URL}" ]      && missing+=("DATABASE_URL")
+        [ -z "${DIRECT_URL}" ]        && missing+=("DIRECT_URL")
+
+        echo "=== Secret presence report (no values shown) ==="
+        echo "EC2_HOST          length: ${#EC2_HOST}"
+        echo "EC2_USERNAME      length: ${#EC2_USERNAME}"
+        echo "EC2_SSH_KEY       length: ${#EC2_SSH_KEY}"
+        echo "DISCORD_BOT_TOKEN length: ${#DISCORD_BOT_TOKEN}"
+        echo "INTERNAL_API_KEY  length: ${#INTERNAL_API_KEY}"
+        echo "DATABASE_URL      length: ${#DATABASE_URL}"
+        echo "DIRECT_URL        length: ${#DIRECT_URL}"
+
+        if [ ${#missing[@]} -ne 0 ]; then
+          echo ""
+          echo "::error::Missing required GitHub Actions secrets: ${missing[*]}"
+          echo "Configure them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+          exit 1
+        fi
+        echo "All required secrets are present."
+
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
