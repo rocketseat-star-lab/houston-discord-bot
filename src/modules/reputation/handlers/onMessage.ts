@@ -23,6 +23,7 @@ export async function onMessage(message: Message): Promise<void> {
         avatarUrl: message.author.displayAvatarURL(),
         messageId: message.id,
         contentLength: content.length,
+        contentSample: content.slice(0, 500),
         isInSocialChannel,
       },
     });
