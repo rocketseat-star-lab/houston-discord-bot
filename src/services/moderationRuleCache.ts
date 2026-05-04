@@ -28,6 +28,8 @@ export interface CachedAction {
 export class ModerationRuleCache {
   private rules: Map<string, CachedRule> = new Map();
   private lastSyncedAt: Date | null = null;
+  private backgroundIntervalId: ReturnType<typeof setInterval> | null = null;
+  private inFlightFetch: Promise<void> | null = null;
 
   /**
    * Busca regras do backend e carrega automaticamente com retry
@@ -145,6 +147,45 @@ export class ModerationRuleCache {
     this.rules.clear();
     this.lastSyncedAt = null;
     console.log('[ModerationRuleCache] Cache cleared');
+  }
+
+  /**
+   * Inicia um polling em background que refaz fetch das regras periodicamente.
+   * Idempotente — chamadas extras são ignoradas.
+   */
+  startBackgroundSync(intervalMs: number = 5 * 60 * 1000): void {
+    if (this.backgroundIntervalId) return;
+    console.log(
+      `[ModerationRuleCache] Background sync iniciado (intervalo: ${intervalMs / 1000}s)`
+    );
+    this.backgroundIntervalId = setInterval(() => {
+      this.fetchAndLoadRules(2, 2000).catch((err) => {
+        console.error('[ModerationRuleCache] Background sync error:', err);
+      });
+    }, intervalMs);
+  }
+
+  stopBackgroundSync(): void {
+    if (this.backgroundIntervalId) {
+      clearInterval(this.backgroundIntervalId);
+      this.backgroundIntervalId = null;
+    }
+  }
+
+  /**
+   * Garante que o cache está populado. Se vazio, faz fetch agora.
+   * Deduplica chamadas concorrentes via inFlightFetch.
+   */
+  async ensurePopulated(): Promise<void> {
+    if (this.rules.size > 0) return;
+    if (this.inFlightFetch) {
+      await this.inFlightFetch;
+      return;
+    }
+    this.inFlightFetch = this.fetchAndLoadRules(3, 1500).finally(() => {
+      this.inFlightFetch = null;
+    });
+    await this.inFlightFetch;
   }
 
   /**

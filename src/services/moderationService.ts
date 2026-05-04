@@ -51,8 +51,13 @@ export class ModerationService {
    */
   async evaluateMessage(message: Message): Promise<void> {
     try {
-      // Pega todas as regras ativas do cache
-      const rules = moderationRuleCache.getAllRules();
+      // Pega todas as regras ativas do cache. Se vazio (ex: bot acabou de
+      // subir e o initial fetch falhou), tenta repopular antes de desistir.
+      let rules = moderationRuleCache.getAllRules();
+      if (rules.length === 0) {
+        await moderationRuleCache.ensurePopulated();
+        rules = moderationRuleCache.getAllRules();
+      }
 
       if (rules.length === 0) {
         return; // Sem regras para avaliar

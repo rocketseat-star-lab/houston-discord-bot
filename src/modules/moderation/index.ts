@@ -173,7 +173,16 @@ export const moderationModule: FeatureModule = {
   routes: moderationRoutes,
   async initialize() {
     console.log('[moderation] Loading moderation rules from backend...');
-    await moderationRuleCache.fetchAndLoadRules(5, 3000);
+    // 10 retries x 5s = up to 50s of tolerance for backend cold start.
+    await moderationRuleCache.fetchAndLoadRules(10, 5000);
     console.log('[moderation] Moderation rules loading completed');
+
+    // Background sync every 5 minutes — auto-recovery if a deploy or
+    // transient outage left the cache stale.
+    moderationRuleCache.startBackgroundSync(5 * 60 * 1000);
+  },
+
+  async shutdown() {
+    moderationRuleCache.stopBackgroundSync();
   },
 };
