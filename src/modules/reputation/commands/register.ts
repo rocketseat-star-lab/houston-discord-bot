@@ -6,19 +6,19 @@ const commands = [
     .setName('recomendar')
     .setDescription('Recomende positivamente um membro pela conduta na comunidade')
     .addUserOption((opt) =>
-      opt.setName('membro').setDescription('Membro que voce quer recomendar').setRequired(true)
+      opt.setName('membro').setDescription('Membro que você quer recomendar').setRequired(true)
     ),
 
   new SlashCommandBuilder()
     .setName('nao-recomendar')
     .setDescription('Sinalize um membro com comportamento ruim na comunidade')
     .addUserOption((opt) =>
-      opt.setName('membro').setDescription('Membro que voce quer sinalizar').setRequired(true)
+      opt.setName('membro').setDescription('Membro que você quer sinalizar').setRequired(true)
     )
     .addStringOption((opt) =>
       opt
         .setName('motivo')
-        .setDescription('Explicacao concreta do motivo (minimo 20 caracteres)')
+        .setDescription('Explicação concreta do motivo (mínimo 20 caracteres)')
         .setRequired(true)
         .setMinLength(20)
         .setMaxLength(500)
@@ -26,7 +26,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('reputacao')
-    .setDescription('Veja a propria reputacao ou de outro membro (apenas moderacao)')
+    .setDescription('Veja a própria reputação ou de outro membro (apenas moderação)')
     .addUserOption((opt) =>
       opt.setName('membro').setDescription('Apenas moderadores podem ver de outros').setRequired(false)
     ),

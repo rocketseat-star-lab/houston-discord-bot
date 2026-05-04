@@ -12,7 +12,7 @@ export async function onInteraction(interaction: Interaction): Promise<void> {
     const guildId = interaction.guild?.id;
     if (!guildId || guildId !== REPUTATION_CONFIG.activeGuildId) {
       await interaction.reply({
-        content: 'Sistema de reputacao nao ativo neste servidor.',
+        content: 'Sistema de reputação não ativo neste servidor.',
         ephemeral: true,
       });
       return;
@@ -44,11 +44,11 @@ async function handleVote(
   const reason = interaction.options.getString('motivo') || undefined;
 
   if (target.bot) {
-    await interaction.editReply({ content: 'Bots nao podem ser avaliados.' });
+    await interaction.editReply({ content: 'Bots não podem ser avaliados.' });
     return;
   }
   if (target.id === interaction.user.id) {
-    await interaction.editReply({ content: 'Voce nao pode votar em si mesmo.' });
+    await interaction.editReply({ content: 'Você não pode votar em si mesmo.' });
     return;
   }
 
@@ -94,7 +94,7 @@ async function handleReputation(
       memberPerms?.has(PermissionFlagsBits.Administrator);
     if (!hasModPerm) {
       await interaction.editReply({
-        content: 'Apenas moderadores podem ver a reputacao de outros membros.',
+        content: 'Apenas moderadores podem ver a reputação de outros membros.',
       });
       return;
     }
@@ -104,16 +104,16 @@ async function handleReputation(
   const result = await toolsClient.getMyScore(interaction.guild!.id, targetUser.id);
 
   if (!result) {
-    await interaction.editReply({ content: 'Nao foi possivel buscar a reputacao agora.' });
+    await interaction.editReply({ content: 'Não foi possível buscar a reputação agora.' });
     return;
   }
 
   const embed = new EmbedBuilder()
-    .setTitle(`Reputacao de ${targetUser.username}`)
+    .setTitle(`Reputação de ${targetUser.username}`)
     .setColor(reputationColor(result.scoreTotal))
     .setDescription(
       result.message ||
-        `Pontuacao: **${Math.round(result.scoreTotal)} / 100**\n${descriptionForScore(result.scoreTotal)}`
+        `Pontuação: **${Math.round(result.scoreTotal)} / 100**\n${descriptionForScore(result.scoreTotal)}`
     )
     .setThumbnail(targetUser.displayAvatarURL());
 
@@ -128,8 +128,8 @@ function reputationColor(score: number): number {
 }
 
 function descriptionForScore(score: number): string {
-  if (score >= 70) return 'Membro com excelente reputacao na comunidade.';
+  if (score >= 70) return 'Membro com excelente reputação na comunidade.';
   if (score >= 50) return 'Membro engajado com boa conduta.';
-  if (score >= 30) return 'Reputacao em construcao. Continue contribuindo.';
-  return 'Reputacao baixa. Atencao a sua conduta na comunidade.';
+  if (score >= 30) return 'Reputação em construção. Continue contribuindo.';
+  return 'Reputação baixa. Atenção a sua conduta na comunidade.';
 }
