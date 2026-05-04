@@ -1,197 +1,127 @@
-name: Deploy to VM
+name: Deploy to Kubernetes
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+
+concurrency:
+  group: deploy-discord-bot
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 011801494293.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY: houston-discord-bot
+  KUBE_NAMESPACE: discord
+  KUBE_DEPLOYMENT: discord-bot
+  KUBE_CONTAINER: discord-bot
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Validate required secrets
-      env:
-        EC2_HOST: ${{ secrets.EC2_HOST }}
-        EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-        DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-        INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        DIRECT_URL: ${{ secrets.DIRECT_URL }}
-      run: |
-        missing=()
-        [ -z "${EC2_HOST}" ]          && missing+=("EC2_HOST")
-        [ -z "${EC2_USERNAME}" ]      && missing+=("EC2_USERNAME")
-        [ -z "${EC2_SSH_KEY}" ]       && missing+=("EC2_SSH_KEY")
-        [ -z "${DISCORD_BOT_TOKEN}" ] && missing+=("DISCORD_BOT_TOKEN")
-        [ -z "${INTERNAL_API_KEY}" ]  && missing+=("INTERNAL_API_KEY")
-        [ -z "${DATABASE_URL}" ]      && missing+=("DATABASE_URL")
-        [ -z "${DIRECT_URL}" ]        && missing+=("DIRECT_URL")
+      - name: Validate required secrets
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+        run: |
+          missing=()
+          [ -z "${AWS_ACCESS_KEY_ID}" ] && missing+=("AWS_ACCESS_KEY_ID")
+          [ -z "${AWS_SECRET_ACCESS_KEY}" ] && missing+=("AWS_SECRET_ACCESS_KEY")
+          [ -z "${KUBE_CONFIG_B64}" ] && missing+=("KUBE_CONFIG_B64")
 
-        echo "=== Secret presence report (no values shown) ==="
-        echo "EC2_HOST          length: ${#EC2_HOST}"
-        echo "EC2_USERNAME      length: ${#EC2_USERNAME}"
-        echo "EC2_SSH_KEY       length: ${#EC2_SSH_KEY}"
-        echo "DISCORD_BOT_TOKEN length: ${#DISCORD_BOT_TOKEN}"
-        echo "INTERNAL_API_KEY  length: ${#INTERNAL_API_KEY}"
-        echo "DATABASE_URL      length: ${#DATABASE_URL}"
-        echo "DIRECT_URL        length: ${#DIRECT_URL}"
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required GitHub Actions secrets: ${missing[*]}"
+            echo "Configure them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
 
-        if [ ${#missing[@]} -ne 0 ]; then
-          echo ""
-          echo "::error::Missing required GitHub Actions secrets: ${missing[*]}"
-          echo "Configure them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
-          exit 1
-        fi
-        echo "All required secrets are present."
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Setup SSH
-      env:
-        EC2_HOST: ${{ secrets.EC2_HOST }}
-        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-      run: |
-        set +e
-        mkdir -p ~/.ssh
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-        # Write key, then validate format
-        printf '%s\n' "${EC2_SSH_KEY}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
+      - name: Build and push image
+        env:
+          IMAGE_URI: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          docker build --tag "${IMAGE_URI}" .
+          docker push "${IMAGE_URI}"
+          echo "IMAGE_URI=${IMAGE_URI}" >> "${GITHUB_ENV}"
 
-        if ! ssh-keygen -l -f ~/.ssh/id_rsa > /dev/null 2>&1; then
-          echo "::error::EC2_SSH_KEY is malformed (ssh-keygen could not parse it)."
-          exit 1
-        fi
-        echo "SSH key parses correctly."
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
 
-        echo "=== ssh-keyscan with 15s timeout ==="
-        timeout 15 ssh-keyscan -H "${EC2_HOST}" > /tmp/keyscan_out 2> /tmp/keyscan_err
-        KEYSCAN_RC=$?
-        echo "ssh-keyscan exit code: ${KEYSCAN_RC}"
-        echo "ssh-keyscan stderr:"
-        cat /tmp/keyscan_err
+      - name: Configure kubectl
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+        run: |
+          mkdir -p "${HOME}/.kube"
+          printf '%s' "${KUBE_CONFIG_B64}" | base64 --decode > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+          kubectl version --client
+          kubectl -n "${KUBE_NAMESPACE}" get deployment "${KUBE_DEPLOYMENT}"
 
-        if [ "$KEYSCAN_RC" -ne 0 ] || [ ! -s /tmp/keyscan_out ]; then
-          echo "::error::ssh-keyscan failed."
-          echo "Likely causes (one of):"
-          echo "  - EC2_HOST is invalid (wrong IP/hostname or stale)"
-          echo "  - EC2 instance is stopped or unreachable"
-          echo "  - Security group blocks port 22 from GitHub Actions IPs"
-          exit 1
-        fi
+      - name: Run database migrations
+        env:
+          MIGRATION_JOB: discord-bot-migrate-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${MIGRATION_JOB}
+            namespace: ${KUBE_NAMESPACE}
+          spec:
+            backoffLimit: 1
+            ttlSecondsAfterFinished: 600
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: migrate
+                    image: ${IMAGE_URI}
+                    imagePullPolicy: Always
+                    command: ["npx", "prisma", "migrate", "deploy"]
+                    envFrom:
+                      - secretRef:
+                          name: discord-bot-secrets
+          EOF
 
-        cat /tmp/keyscan_out >> ~/.ssh/known_hosts
-        echo "ssh-keyscan returned $(wc -l < /tmp/keyscan_out) host key(s)."
+          kubectl -n "${KUBE_NAMESPACE}" wait --for=condition=complete "job/${MIGRATION_JOB}" --timeout=300s || {
+            kubectl -n "${KUBE_NAMESPACE}" logs "job/${MIGRATION_JOB}" --all-containers=true
+            exit 1
+          }
 
-    - name: Create .env file
-      run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} bash <<EOF
-        set -e
-        mkdir -p ~/houston_bot
-        cd ~/houston_bot
-        cat > .env <<'INNEREOF'
-        DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
-        INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
-        API_PORT=${{ secrets.API_PORT }}
-        AI_AGENT_GUILD_ID=${{ secrets.AI_AGENT_GUILD_ID }}
-        AI_SERVICE_URL=${{ secrets.AI_SERVICE_URL }}
-        AI_SERVICE_API_KEY=${{ secrets.AI_SERVICE_API_KEY }}
-        DATABASE_URL=${{ secrets.DATABASE_URL }}
-        DIRECT_URL=${{ secrets.DIRECT_URL }}
-        REPORT_FORUM_CHANNEL_ID=${{ secrets.REPORT_FORUM_CHANNEL_ID }}
-        OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-        SIMILARITY_THRESHOLD=${{ secrets.SIMILARITY_THRESHOLD }}
-        MAX_SIMILAR_REPORTS=${{ secrets.MAX_SIMILAR_REPORTS }}
-        INNEREOF
-        echo ".env file created successfully"
-        EOF
+      - name: Deploy image to Kubernetes
+        run: |
+          kubectl -n "${KUBE_NAMESPACE}" set image \
+            "deployment/${KUBE_DEPLOYMENT}" \
+            "${KUBE_CONTAINER}=${IMAGE_URI}"
 
-    - name: Pull code and build
-      run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
-        set -e
-        cd ~
+          kubectl -n "${KUBE_NAMESPACE}" rollout status \
+            "deployment/${KUBE_DEPLOYMENT}" \
+            --timeout=300s
 
-        # Clone or update repository
-        if [ -d "houston_bot" ]; then
-          echo "Updating existing repository..."
-          cd houston_bot
-          # Reset any local changes (e.g., yarn.lock modifications from npm install)
-          git reset --hard HEAD
-          git clean -fd
-          git pull origin main
-        else
-          echo "Cloning repository for the first time..."
-          git clone https://github.com/${{ github.repository }}.git houston_bot
-          cd houston_bot
-        fi
+      - name: Verify running image
+        run: |
+          RUNNING_IMAGE="$(kubectl -n "${KUBE_NAMESPACE}" get deployment "${KUBE_DEPLOYMENT}" -o jsonpath="{.spec.template.spec.containers[?(@.name=='${KUBE_CONTAINER}')].image}")"
 
-        # Install Node.js if needed (Amazon Linux)
-        if ! command -v node &> /dev/null; then
-          echo "Installing Node.js..."
-          curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
-          sudo yum install -y nodejs
-        fi
+          if [ "${RUNNING_IMAGE}" != "${IMAGE_URI}" ]; then
+            echo "::error::Expected ${IMAGE_URI}, got ${RUNNING_IMAGE}"
+            exit 1
+          fi
 
-        # Install PM2 globally if needed
-        if ! command -v pm2 &> /dev/null; then
-          echo "Installing PM2..."
-          sudo npm install -g pm2
-        fi
-
-        # Install dependencies
-        echo "Installing npm dependencies..."
-        npm install
-
-        # Run database migrations
-        echo "Running database migrations..."
-        npx prisma migrate deploy
-
-        # Generate Prisma client (ensures types match schema after migrations)
-        echo "Generating Prisma client..."
-        npx prisma generate
-
-        # Build TypeScript project
-        echo "Building project..."
-        npm run build
-
-        echo "Build completed successfully!"
-        EOF
-
-    - name: Restart PM2 application
-      run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
-        set -e
-        cd ~/houston_bot
-
-        echo "Restarting PM2 application..."
-        
-        # Check if process exists and restart, otherwise start new
-        if pm2 describe houston_bot > /dev/null 2>&1; then
-          pm2 restart houston_bot --update-env
-          echo "PM2 process restarted with updated environment"
-        else
-          pm2 start dist/index.js --name houston_bot
-          echo "PM2 process started for the first time"
-        fi
-
-        # Wait a moment for the app to initialize
-        sleep 3
-
-        # Verify the application is running
-        echo "Verifying PM2 status..."
-        pm2 status houston_bot
-
-        # Check if the process is online
-        PM2_STATUS=$(pm2 jlist | jq -r '.[] | select(.name=="houston_bot") | .pm2_env.status')
-        if [ "$PM2_STATUS" != "online" ]; then
-          echo "ERROR: Application failed to start! Status: $PM2_STATUS"
-          echo "Recent logs:"
-          pm2 logs houston_bot --lines 20 --nostream
-          exit 1
-        fi
-
-        echo "Deploy completed successfully! Application is running."
-        EOF
+          echo "Deployment ${KUBE_NAMESPACE}/${KUBE_DEPLOYMENT} is running ${RUNNING_IMAGE}"
