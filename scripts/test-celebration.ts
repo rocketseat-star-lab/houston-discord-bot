@@ -86,9 +86,13 @@ async function main() {
     url.searchParams.set('month', PT_MONTH_ABBR[today.getMonth()]);
     imageUrl = url.toString();
     text = [
-      `🎉 (TESTE) Vamos celebrar o aniversariante do dia: <@${to}>!`,
+      `🎉 🇧🇷 (TESTE) Vamos celebrar o aniversariante do dia: <@${to}>!`,
       'Que este novo ciclo seja cheio de realizações e alegrias.',
       'Parabéns e feliz aniversário! 💜🚀',
+      '',
+      `🎉 🇦🇷 (TESTE) ¡Vamos a celebrar al cumpleañero del día: <@${to}>!`,
+      'Que este nuevo ciclo esté lleno de logros y alegrías.',
+      '¡Feliz cumpleaños! 💜🚀',
     ].join('\n');
   } else {
     const years = parseInt(yearsRaw || '3') || 3;
@@ -102,27 +106,39 @@ async function main() {
     );
     url.searchParams.set('years', String(years));
     imageUrl = url.toString();
+    const yearLabelPt = years === 1 ? 'ano' : 'anos';
+    const yearLabelEs = years === 1 ? 'año' : 'años';
     text = [
-      `🚀 (TESTE) Hoje o <@${to}> completa ${years} ${years === 1 ? 'ano' : 'anos'} de Rocketseat!`,
+      `🚀 🇧🇷 (TESTE) Hoje o <@${to}> completa ${years} ${yearLabelPt} de Rocketseat!`,
       'Parabéns! É uma alegria poder contar com um profissional como você.',
       '#JuntosNoPróximoNível 💜',
+      '',
+      `🚀 🇦🇷 (TESTE) ¡Hoy <@${to}> cumple ${years} ${yearLabelEs} en Rocketseat!`,
+      '¡Felicitaciones! Es una alegría contar con un profesional como vos.',
+      '#JuntosEnElPróximoNivel 💜',
     ].join('\n');
   }
 
   console.log('Imagem gerada:', imageUrl);
 
-  // 3. Postar como DM (channel = user ID abre IM automatico)
-  console.log(`Enviando DM pro usuario ${to}...`);
+  // 3. Aquecer image-generator (cold start no Vercel pode ultrapassar o
+  //    timeout que o Slack usa pra buscar imagens em image blocks)
+  console.log('Pre-fetching image...');
+  await fetch(imageUrl).catch((err) => console.warn('warmup failed:', err?.message));
 
-  // Mensagem com URL anexada — Slack faz unfurl async (mais tolerante a
-  // cold starts do image-generator que o block image, que tem timeout curto).
-  const textWithLink = `${text}\n${imageUrl}`;
+  // 4. Postar como DM com image block (visual limpo, sem URL exposta)
+  console.log(`Enviando DM pro usuario ${to}...`);
+  const blocks = [
+    { type: 'section', text: { type: 'mrkdwn', text } },
+    { type: 'image', image_url: imageUrl, alt_text: 'Celebração Rocketseat (teste)' },
+  ];
 
   const result = await slack.chat.postMessage({
     channel: to,
-    text: textWithLink,
-    unfurl_links: true,
-    unfurl_media: true,
+    text,
+    blocks: blocks as never,
+    unfurl_links: false,
+    unfurl_media: false,
   });
 
   console.log('Enviado!', { channel: result.channel, ts: result.ts });

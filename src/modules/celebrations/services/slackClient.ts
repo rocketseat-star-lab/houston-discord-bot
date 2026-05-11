@@ -53,26 +53,47 @@ export const slackClient = {
   },
 
   /**
-   * Posts a message in the configured channel. Image URLs are appended
-   * as plain links — Slack unfurls them asynchronously, which is more
-   * tolerant of slow image generators (cold starts, etc) than using
-   * `image` blocks (which Slack tries to fetch synchronously before
-   * the message is delivered and gives up quickly).
+   * Posts a message in the configured channel using `image` blocks (clean
+   * visual, no visible URLs). To avoid Slack's short timeout for fetching
+   * images, we warm up each URL with a HEAD request first — that pushes
+   * the image-generator out of cold start and primes any CDN cache, so
+   * Slack's fetch completes well before its deadline.
    */
   async postMessage(opts: { channel: string; text: string; imageUrls?: string[] }): Promise<void> {
     const c = getClient();
     if (!c) throw new Error('Slack client não configurado.');
 
-    const lines = [opts.text];
-    for (const url of opts.imageUrls || []) {
-      lines.push(url);
+    const urls = opts.imageUrls || [];
+
+    // Warm up each image URL so Slack's sync fetch hits a warm endpoint.
+    if (urls.length > 0) {
+      await Promise.all(
+        urls.map((url) =>
+          fetch(url, { method: 'GET' }).catch((err) => {
+            console.warn(`[celebrations] warmup failed for ${url}:`, err?.message || err);
+            return null;
+          })
+        )
+      );
+    }
+
+    const blocks: Array<Record<string, unknown>> = [
+      { type: 'section', text: { type: 'mrkdwn', text: opts.text } },
+    ];
+    for (const url of urls) {
+      blocks.push({
+        type: 'image',
+        image_url: url,
+        alt_text: 'Celebração Rocketseat',
+      });
     }
 
     await c.chat.postMessage({
       channel: opts.channel,
-      text: lines.join('\n'),
-      unfurl_links: true,
-      unfurl_media: true,
+      text: opts.text,
+      blocks: blocks as never,
+      unfurl_links: false,
+      unfurl_media: false,
     });
   },
 };
