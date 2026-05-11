@@ -113,15 +113,14 @@ async function main() {
 
   // 3. Postar como DM (channel = user ID abre IM automatico)
   console.log(`Enviando DM pro usuario ${to}...`);
-  const blocks = [
-    { type: 'section', text: { type: 'mrkdwn', text } },
-    { type: 'image', image_url: imageUrl, alt_text: 'Celebração Rocketseat (teste)' },
-  ];
+
+  // Mensagem com URL anexada — Slack faz unfurl async (mais tolerante a
+  // cold starts do image-generator que o block image, que tem timeout curto).
+  const textWithLink = `${text}\n${imageUrl}`;
 
   const result = await slack.chat.postMessage({
     channel: to,
-    text,
-    blocks: blocks as never,
+    text: textWithLink,
     unfurl_links: true,
     unfurl_media: true,
   });
