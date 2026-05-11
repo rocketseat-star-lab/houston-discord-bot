@@ -37,7 +37,17 @@ async function resolveSlackIdsAndAvatars(boosters: BoosterDTO[]): Promise<Resolv
   return resolved;
 }
 
-async function dispatchBirthdays(date: Date): Promise<{ celebrated: number }> {
+export interface PreviewedPost {
+  kind: 'birthday' | 'anniversary';
+  date: string;
+  text: string;
+  imageUrls: string[];
+}
+
+async function dispatchBirthdays(
+  date: Date,
+  opts: { dryRun: boolean; previews: PreviewedPost[] }
+): Promise<{ celebrated: number }> {
   const month = date.getMonth() + 1;
   const day = date.getDate();
   const boosters = await toolsClient.findBoosters('birthday', month, day);
@@ -55,16 +65,29 @@ async function dispatchBirthdays(date: Date): Promise<{ celebrated: number }> {
     })
   );
 
-  await slackClient.postMessage({
-    channel: CELEBRATIONS_CONFIG.slackChannelId,
+  opts.previews.push({
+    kind: 'birthday',
+    date: date.toISOString().slice(0, 10),
     text,
     imageUrls,
   });
 
+  if (!opts.dryRun) {
+    await slackClient.postMessage({
+      channel: CELEBRATIONS_CONFIG.slackChannelId,
+      text,
+      imageUrls,
+    });
+  }
+
   return { celebrated: resolved.length };
 }
 
-async function dispatchAnniversaries(date: Date, today: Date): Promise<{ celebrated: number }> {
+async function dispatchAnniversaries(
+  date: Date,
+  today: Date,
+  opts: { dryRun: boolean; previews: PreviewedPost[] }
+): Promise<{ celebrated: number }> {
   const month = date.getMonth() + 1;
   const day = date.getDate();
   const boosters = await toolsClient.findBoosters('admission', month, day);
@@ -91,29 +114,46 @@ async function dispatchAnniversaries(date: Date, today: Date): Promise<{ celebra
     })
   );
 
-  await slackClient.postMessage({
-    channel: CELEBRATIONS_CONFIG.slackChannelId,
+  opts.previews.push({
+    kind: 'anniversary',
+    date: date.toISOString().slice(0, 10),
     text,
     imageUrls,
   });
 
+  if (!opts.dryRun) {
+    await slackClient.postMessage({
+      channel: CELEBRATIONS_CONFIG.slackChannelId,
+      text,
+      imageUrls,
+    });
+  }
+
   return { celebrated: resolved.length };
 }
 
-export async function dispatchCelebrations(now: Date = new Date()): Promise<{
+export async function dispatchCelebrations(
+  now: Date = new Date(),
+  options: { dryRun?: boolean } = {}
+): Promise<{
   birthdays: number;
   anniversaries: number;
   datesCovered: string[];
+  dryRun: boolean;
+  previews: PreviewedPost[];
 }> {
-  if (!CELEBRATIONS_CONFIG.slackChannelId) {
+  const dryRun = options.dryRun ?? CELEBRATIONS_CONFIG.dryRun;
+  const previews: PreviewedPost[] = [];
+
+  if (!dryRun && !CELEBRATIONS_CONFIG.slackChannelId) {
     console.warn('[celebrations] SLACK_CELEBRATIONS_CHANNEL_ID nao configurado.');
-    return { birthdays: 0, anniversaries: 0, datesCovered: [] };
+    return { birthdays: 0, anniversaries: 0, datesCovered: [], dryRun, previews };
   }
 
   const dates = getDatesToCover(now);
   if (dates.length === 0) {
     console.log('[celebrations] Hoje e dia nao util, nada a fazer.');
-    return { birthdays: 0, anniversaries: 0, datesCovered: [] };
+    return { birthdays: 0, anniversaries: 0, datesCovered: [], dryRun, previews };
   }
 
   let birthdaysCount = 0;
@@ -121,13 +161,13 @@ export async function dispatchCelebrations(now: Date = new Date()): Promise<{
 
   for (const date of dates) {
     try {
-      const b = await dispatchBirthdays(date);
+      const b = await dispatchBirthdays(date, { dryRun, previews });
       birthdaysCount += b.celebrated;
     } catch (err) {
       console.error(`[celebrations] dispatchBirthdays(${date.toISOString()}) error:`, err);
     }
     try {
-      const a = await dispatchAnniversaries(date, now);
+      const a = await dispatchAnniversaries(date, now, { dryRun, previews });
       anniversariesCount += a.celebrated;
     } catch (err) {
       console.error(`[celebrations] dispatchAnniversaries(${date.toISOString()}) error:`, err);
@@ -138,5 +178,7 @@ export async function dispatchCelebrations(now: Date = new Date()): Promise<{
     birthdays: birthdaysCount,
     anniversaries: anniversariesCount,
     datesCovered: dates.map((d) => d.toISOString().slice(0, 10)),
+    dryRun,
+    previews,
   };
 }
