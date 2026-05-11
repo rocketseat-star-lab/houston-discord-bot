@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "backfill": "ts-node scripts/backfill-reports.ts",
+    "test-celebration": "ts-node --transpile-only scripts/test-celebration.ts",
     "test": "vitest run src"
   },
   "keywords": [],
