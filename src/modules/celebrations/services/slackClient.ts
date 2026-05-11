@@ -53,28 +53,24 @@ export const slackClient = {
   },
 
   /**
-   * Posts a message in the configured channel. `attachmentUrls` are appended
-   * as plain links so Slack will unfurl them as images.
+   * Posts a message in the configured channel. Image URLs are appended
+   * as plain links — Slack unfurls them asynchronously, which is more
+   * tolerant of slow image generators (cold starts, etc) than using
+   * `image` blocks (which Slack tries to fetch synchronously before
+   * the message is delivered and gives up quickly).
    */
   async postMessage(opts: { channel: string; text: string; imageUrls?: string[] }): Promise<void> {
     const c = getClient();
     if (!c) throw new Error('Slack client não configurado.');
 
-    const blocks: Array<Record<string, unknown>> = [
-      { type: 'section', text: { type: 'mrkdwn', text: opts.text } },
-    ];
+    const lines = [opts.text];
     for (const url of opts.imageUrls || []) {
-      blocks.push({
-        type: 'image',
-        image_url: url,
-        alt_text: 'Celebração Rocketseat',
-      });
+      lines.push(url);
     }
 
     await c.chat.postMessage({
       channel: opts.channel,
-      text: opts.text,
-      blocks: blocks as never,
+      text: lines.join('\n'),
       unfurl_links: true,
       unfurl_media: true,
     });
