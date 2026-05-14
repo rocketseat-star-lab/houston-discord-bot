@@ -5,6 +5,7 @@ export interface BoosterDTO {
   email: string;
   full_name: string;
   gender: 'MALE' | 'FEMALE';
+  company: 'ROCKETSEAT' | 'DIGITAL_HOUSE';
   birthday_date: string;
   admission_date: string | null;
   slack_user_id: string | null;

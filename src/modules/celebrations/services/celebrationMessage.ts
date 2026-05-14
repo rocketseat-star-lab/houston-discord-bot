@@ -5,6 +5,15 @@ export interface ResolvedBooster extends BoosterDTO {
   slack_user_id: string;
 }
 
+export const COMPANY_DISPLAY_NAMES: Record<string, string> = {
+  ROCKETSEAT: 'Rocketseat',
+  DIGITAL_HOUSE: 'Digital House',
+};
+
+function companyName(code: string): string {
+  return COMPANY_DISPLAY_NAMES[code] || code;
+}
+
 function mention(b: ResolvedBooster): string {
   return `<@${b.slack_user_id}>`;
 }
@@ -49,16 +58,17 @@ function birthdayMessagePT(boosters: ResolvedBooster[]): string {
   ].join('\n');
 }
 
-function anniversaryMessagePT(boosters: ResolvedBooster[], today: Date): string {
+function anniversaryMessagePT(boosters: ResolvedBooster[], today: Date, companyCode: string): string {
+  const name = companyName(companyCode);
   if (boosters.length === 1) {
     const b = boosters[0];
     const years = yearsOnCompany(b.admission_date!, today);
     const articleSubject = b.gender === 'FEMALE' ? 'a' : 'o';
     const articleProf = b.gender === 'FEMALE' ? 'uma' : 'um';
     return [
-      `Hoje ${articleSubject} ${mention(b)} completa ${years} ${years === 1 ? 'ano' : 'anos'} de Rocketseat!`,
+      `Hoje ${articleSubject} ${mention(b)} completa ${years} ${years === 1 ? 'ano' : 'anos'} de ${name}!`,
       `Parabéns! É uma alegria poder contar com ${articleProf} profissional como você.`,
-      '#JuntosNoPróximoNível 💜',
+      '💜',
     ].join('\n');
   }
   const list = boosters
@@ -69,9 +79,9 @@ function anniversaryMessagePT(boosters: ResolvedBooster[], today: Date): string 
     .join(', ')
     .replace(/, ([^,]+)$/, ' e $1');
   return [
-    `Hoje completam tempo de Rocketseat: ${list}!`,
+    `Hoje completam tempo de ${name}: ${list}!`,
     'Parabéns! É uma alegria poder contar com profissionais como vocês.',
-    '#JuntosNoPróximoNível 💜',
+    '💜',
   ].join('\n');
 }
 
@@ -97,15 +107,16 @@ function birthdayMessageES(boosters: ResolvedBooster[]): string {
   ].join('\n');
 }
 
-function anniversaryMessageES(boosters: ResolvedBooster[], today: Date): string {
+function anniversaryMessageES(boosters: ResolvedBooster[], today: Date, companyCode: string): string {
+  const name = companyName(companyCode);
   if (boosters.length === 1) {
     const b = boosters[0];
     const years = yearsOnCompany(b.admission_date!, today);
     const articleProf = b.gender === 'FEMALE' ? 'una' : 'un';
     return [
-      `¡Hoy ${mention(b)} cumple ${years} ${years === 1 ? 'año' : 'años'} en Rocketseat!`,
+      `¡Hoy ${mention(b)} cumple ${years} ${years === 1 ? 'año' : 'años'} en ${name}!`,
       `¡Felicitaciones! Es una alegría contar con ${articleProf} profesional como vos.`,
-      '#JuntosEnElPróximoNivel 💜',
+      '💜',
     ].join('\n');
   }
   const list = boosters
@@ -116,9 +127,9 @@ function anniversaryMessageES(boosters: ResolvedBooster[], today: Date): string 
     .join(', ')
     .replace(/, ([^,]+)$/, ' y $1');
   return [
-    `¡Hoy cumplen tiempo en Rocketseat: ${list}!`,
+    `¡Hoy cumplen tiempo en ${name}: ${list}!`,
     '¡Felicitaciones! Es una alegría contar con profesionales como ustedes.',
-    '#JuntosEnElPróximoNivel 💜',
+    '💜',
   ].join('\n');
 }
 
@@ -140,9 +151,12 @@ export function companyAnniversaryMessage(
   today: Date = new Date()
 ): string {
   if (boosters.length === 0) return '';
+  // All boosters in a single message should be from the same company
+  // (dispatcher groups by company before calling this).
+  const companyCode = boosters[0].company;
   return bilingual(
     '🚀',
-    anniversaryMessagePT(boosters, today),
-    anniversaryMessageES(boosters, today)
+    anniversaryMessagePT(boosters, today, companyCode),
+    anniversaryMessageES(boosters, today, companyCode)
   );
 }

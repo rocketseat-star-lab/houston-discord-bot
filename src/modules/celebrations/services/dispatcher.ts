@@ -104,32 +104,44 @@ async function dispatchAnniversaries(
   const resolved = await resolveSlackIdsAndAvatars(filtered);
   if (resolved.length === 0) return { celebrated: 0 };
 
-  const text = companyAnniversaryMessage(resolved, today);
-  const imageUrls = resolved.map((b) =>
-    companyAnniversaryImageUrl({
-      fullName: b.full_name,
-      avatarUrl: b.avatar_url,
-      admissionDate: new Date(b.admission_date!),
-      today,
-    })
-  );
+  // Group by company so each company gets its own message with its own name.
+  const byCompany = new Map<string, typeof resolved>();
+  for (const b of resolved) {
+    const key = b.company || 'ROCKETSEAT';
+    if (!byCompany.has(key)) byCompany.set(key, []);
+    byCompany.get(key)!.push(b);
+  }
 
-  opts.previews.push({
-    kind: 'anniversary',
-    date: date.toISOString().slice(0, 10),
-    text,
-    imageUrls,
-  });
+  let total = 0;
+  for (const group of byCompany.values()) {
+    const text = companyAnniversaryMessage(group, today);
+    const imageUrls = group.map((b) =>
+      companyAnniversaryImageUrl({
+        fullName: b.full_name,
+        avatarUrl: b.avatar_url,
+        admissionDate: new Date(b.admission_date!),
+        today,
+      })
+    );
 
-  if (!opts.dryRun) {
-    await slackClient.postMessage({
-      channel: CELEBRATIONS_CONFIG.slackChannelId,
+    opts.previews.push({
+      kind: 'anniversary',
+      date: date.toISOString().slice(0, 10),
       text,
       imageUrls,
     });
+
+    if (!opts.dryRun) {
+      await slackClient.postMessage({
+        channel: CELEBRATIONS_CONFIG.slackChannelId,
+        text,
+        imageUrls,
+      });
+    }
+    total += group.length;
   }
 
-  return { celebrated: resolved.length };
+  return { celebrated: total };
 }
 
 export async function dispatchCelebrations(
