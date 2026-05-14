@@ -2,30 +2,6 @@ import { Request, Response } from 'express';
 import { Client, ChannelType, ForumChannel, ThreadChannel } from 'discord.js';
 import { discordLogger } from '../../services/discordLogger';
 
-const DISCORD_MESSAGE_LIMIT = 2000;
-const SAFE_CHUNK_LIMIT = 1900; // deixa margem para prefixo de continuacao
-
-function chunkForDiscord(content: string): string[] {
-  if (content.length <= DISCORD_MESSAGE_LIMIT) return [content];
-
-  const chunks: string[] = [];
-  let remaining = content;
-
-  while (remaining.length > SAFE_CHUNK_LIMIT) {
-    // tenta quebrar em \n\n, depois \n, depois espaco
-    let splitAt = remaining.lastIndexOf('\n\n', SAFE_CHUNK_LIMIT);
-    if (splitAt < SAFE_CHUNK_LIMIT / 2) splitAt = remaining.lastIndexOf('\n', SAFE_CHUNK_LIMIT);
-    if (splitAt < SAFE_CHUNK_LIMIT / 2) splitAt = remaining.lastIndexOf(' ', SAFE_CHUNK_LIMIT);
-    if (splitAt <= 0) splitAt = SAFE_CHUNK_LIMIT;
-
-    chunks.push(remaining.slice(0, splitAt).trimEnd());
-    remaining = remaining.slice(splitAt).trimStart();
-  }
-  if (remaining.length > 0) chunks.push(remaining);
-
-  return chunks;
-}
-
 /**
  * Cria uma nova thread em um canal de fórum.
  */
@@ -71,16 +47,11 @@ export async function createForumThread(req: Request, res: Response) {
       content = `<@${mentionUserId}>\n\n${messageContent}`;
     }
 
-    // Discord aceita ate 2000 chars por mensagem. Se o conteudo for maior,
-    // dividimos em chunks: primeiro chunk vira o post inicial, os demais
-    // sao postados como respostas dentro da propria thread.
-    const chunks = chunkForDiscord(content);
-
     // Cria a thread no forum
-    console.log(`[createForumThread] Criando thread: ${threadName} (${chunks.length} chunk(s))`);
+    console.log(`[createForumThread] Criando thread: ${threadName}`);
     const thread = await forumChannel.threads.create({
       name: threadName,
-      message: { content: chunks[0] },
+      message: { content },
     });
 
     // Busca a mensagem inicial da thread
@@ -90,12 +61,6 @@ export async function createForumThread(req: Request, res: Response) {
     if (starterMessage) {
       console.log(`[createForumThread] Suprimindo embeds da mensagem`);
       await starterMessage.suppressEmbeds(true);
-    }
-
-    // Posta os chunks adicionais como respostas na thread
-    for (let i = 1; i < chunks.length; i++) {
-      const followUp = await thread.send(chunks[i]);
-      await followUp.suppressEmbeds(true).catch(() => null);
     }
 
     // Monta a URL da mensagem
