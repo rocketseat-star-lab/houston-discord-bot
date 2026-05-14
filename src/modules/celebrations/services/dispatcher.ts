@@ -46,7 +46,7 @@ export interface PreviewedPost {
 
 async function dispatchBirthdays(
   date: Date,
-  opts: { dryRun: boolean; previews: PreviewedPost[] }
+  opts: { dryRun: boolean; previews: PreviewedPost[]; slackChannelId: string }
 ): Promise<{ celebrated: number }> {
   const month = date.getMonth() + 1;
   const day = date.getDate();
@@ -74,7 +74,7 @@ async function dispatchBirthdays(
 
   if (!opts.dryRun) {
     await slackClient.postMessage({
-      channel: CELEBRATIONS_CONFIG.slackChannelId,
+      channel: opts.slackChannelId,
       text,
       imageUrls,
     });
@@ -86,7 +86,7 @@ async function dispatchBirthdays(
 async function dispatchAnniversaries(
   date: Date,
   today: Date,
-  opts: { dryRun: boolean; previews: PreviewedPost[] }
+  opts: { dryRun: boolean; previews: PreviewedPost[]; slackChannelId: string }
 ): Promise<{ celebrated: number }> {
   const month = date.getMonth() + 1;
   const day = date.getDate();
@@ -133,7 +133,7 @@ async function dispatchAnniversaries(
 
     if (!opts.dryRun) {
       await slackClient.postMessage({
-        channel: CELEBRATIONS_CONFIG.slackChannelId,
+        channel: opts.slackChannelId,
         text,
         imageUrls,
       });
@@ -157,8 +157,21 @@ export async function dispatchCelebrations(
   const dryRun = options.dryRun ?? CELEBRATIONS_CONFIG.dryRun;
   const previews: PreviewedPost[] = [];
 
-  if (!dryRun && !CELEBRATIONS_CONFIG.slackChannelId) {
-    console.warn('[celebrations] SLACK_CELEBRATIONS_CHANNEL_ID nao configurado.');
+  // Load config from Tools (admin can toggle/edit without redeploy).
+  // Fallback to env so the script-based test still works.
+  const config = await toolsClient.getCelebrationsConfig();
+  const enabled = config?.enabled ?? false;
+  const slackChannelId =
+    (config?.slackChannelId && config.slackChannelId.trim()) ||
+    CELEBRATIONS_CONFIG.slackChannelId;
+
+  if (!dryRun && !enabled) {
+    console.log('[celebrations] Disabled via Tools config — pulando envio.');
+    return { birthdays: 0, anniversaries: 0, datesCovered: [], dryRun, previews };
+  }
+
+  if (!dryRun && !slackChannelId) {
+    console.warn('[celebrations] slackChannelId nao configurado (Tools config nem env).');
     return { birthdays: 0, anniversaries: 0, datesCovered: [], dryRun, previews };
   }
 
@@ -173,13 +186,13 @@ export async function dispatchCelebrations(
 
   for (const date of dates) {
     try {
-      const b = await dispatchBirthdays(date, { dryRun, previews });
+      const b = await dispatchBirthdays(date, { dryRun, previews, slackChannelId: slackChannelId || '' });
       birthdaysCount += b.celebrated;
     } catch (err) {
       console.error(`[celebrations] dispatchBirthdays(${date.toISOString()}) error:`, err);
     }
     try {
-      const a = await dispatchAnniversaries(date, now, { dryRun, previews });
+      const a = await dispatchAnniversaries(date, now, { dryRun, previews, slackChannelId: slackChannelId || '' });
       anniversariesCount += a.celebrated;
     } catch (err) {
       console.error(`[celebrations] dispatchAnniversaries(${date.toISOString()}) error:`, err);

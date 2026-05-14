@@ -45,4 +45,23 @@ export const toolsClient = {
       body: JSON.stringify({ slackUserId }),
     }).catch((err) => console.error('[celebrations] updateBoosterSlackId failed:', err));
   },
+
+  async getCelebrationsConfig(): Promise<{ enabled: boolean; slackChannelId: string | null } | null> {
+    const key = apiKey();
+    if (!key) return null;
+    try {
+      const res = await fetch(`${baseUrl()}/api/hr/internal/celebrations/config`, {
+        headers: { 'x-api-key': key },
+      });
+      if (!res.ok) {
+        console.error(`[celebrations] getCelebrationsConfig ${res.status}`);
+        return null;
+      }
+      const body = (await res.json()) as { enabled: boolean; slackChannelId: string | null };
+      return body;
+    } catch (err) {
+      console.error('[celebrations] getCelebrationsConfig failed:', err);
+      return null;
+    }
+  },
 };
