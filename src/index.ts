@@ -27,6 +27,7 @@ import { schedulerModule } from './modules/scheduler/index';
 import { metricsModule } from './modules/metrics/index';
 import { reputationModule } from './modules/reputation/index';
 import { celebrationsModule } from './modules/celebrations/index';
+import { csatReviewsModule } from './modules/csat-reviews/index';
 
 // --- Module Registry ---
 const modules: FeatureModule[] = [
@@ -37,6 +38,7 @@ const modules: FeatureModule[] = [
   metricsModule,
   reputationModule,
   celebrationsModule,
+  csatReviewsModule,
 ];
 
 // --- Discord Client ---
