@@ -32,9 +32,12 @@ export async function fetchMetabaseFeedbacks(opts: {
     return [];
   }
 
+  // Metabase native parameters of type "date/single" esperam apenas "YYYY-MM-DD".
+  // Enviar com hora (ex.: "YYYY-MM-DD HH:mm:ss") faz o Metabase aceitar o
+  // request mas não casar nenhuma linha — foi o que estava acontecendo.
   const fmt = (d: Date) => {
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   };
 
   const parameters: Array<{ type: string; target: any; value: any }> = [
