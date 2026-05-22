@@ -19,7 +19,15 @@ interface DispatchOptions {
   from?: string;
   to?: string;
   now?: Date;
+  // TEMP(csat-test): quando true, se a janela default não tiver feedbacks,
+  // o dispatcher anda pra trás até achar um dia com feedbacks. Remover junto
+  // com o bloco marcado abaixo quando terminar a validação manual.
+  fallbackToLastDayWithFeedbacks?: boolean;
 }
+
+// TEMP(csat-test): limite de dias que o fallback anda pra trás procurando
+// um dia com feedbacks. Evita varredura infinita.
+const FALLBACK_MAX_DAYS_BACK = 30;
 
 function emptyResult(dryRun: boolean, message?: string): DispatchResult {
   return {
@@ -70,7 +78,39 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
   }
 
   // Busca feedbacks no Metabase
-  const allFeedbacks = await fetchMetabaseFeedbacks({ from, to });
+  let allFeedbacks = await fetchMetabaseFeedbacks({ from, to });
+
+  // TEMP(csat-test): fallback p/ último dia útil com feedbacks.
+  // Só dispara quando a janela default veio vazia, sem override manual de
+  // from/to e com a flag explicitamente ativa (route /dispatch da API).
+  // Remover este bloco quando terminar a validação manual.
+  if (
+    allFeedbacks.length === 0 &&
+    opts.fallbackToLastDayWithFeedbacks &&
+    !opts.from &&
+    !opts.to
+  ) {
+    let cursor = new Date(from);
+    cursor.setDate(cursor.getDate() - 1);
+    for (let i = 0; i < FALLBACK_MAX_DAYS_BACK; i++) {
+      const trialFrom = new Date(cursor);
+      trialFrom.setHours(0, 0, 0, 0);
+      const trialTo = new Date(cursor);
+      trialTo.setHours(23, 59, 59, 999);
+      const trial = await fetchMetabaseFeedbacks({ from: trialFrom, to: trialTo });
+      if (trial.length > 0) {
+        allFeedbacks = trial;
+        from = trialFrom;
+        to = trialTo;
+        label = formatBR(trialFrom);
+        console.log(
+          `[csat-reviews] fallback ativo: usando ${label} (${i + 1} dia(s) atrás da janela default)`
+        );
+        break;
+      }
+      cursor.setDate(cursor.getDate() - 1);
+    }
+  }
 
   // Summary inclui todos (com ou sem comentário)
   const summary = buildSummary(allFeedbacks);
