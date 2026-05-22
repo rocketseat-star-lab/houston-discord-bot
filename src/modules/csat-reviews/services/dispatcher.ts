@@ -96,9 +96,15 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     };
   }
 
-  // Cria thread no Slack: mensagem-pai (resumo) + replies (um por feedback)
+  // Cria thread no Slack: mensagem-pai (resumo) + replies (um por feedback).
+  // Cada execução do dispatcher cria uma thread nova (postParent gera um novo ts).
+  const isSingleDay = from.toDateString() === to.toDateString();
+  const threadTitle = isSingleDay
+    ? `*Feedbacks - dia ${formatBR(from)}*`
+    : `*Feedbacks - ${formatBR(from)} a ${formatBR(to)}*`;
+
   const parentText = [
-    `*Feedbacks - dia ${label}*`,
+    threadTitle,
     '',
     summaryMessage({ dateLabel: label, summary }),
   ].join('\n');
