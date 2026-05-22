@@ -12,6 +12,13 @@ export interface DispatchResult {
   summary: CsatSummary;
   feedbacks: CsatFeedback[];
   message?: string;
+  // TEMP(csat-test): diagnóstico do fallback. Remover junto com o resto.
+  _debug?: {
+    metabaseKeyConfigured: boolean;
+    fallbackTriggered: boolean;
+    fallbackAttempts: number;
+    fallbackFoundOn?: string;
+  };
 }
 
 interface DispatchOptions {
@@ -77,6 +84,14 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     return emptyResult(dryRun, 'Canal Slack não configurado nas configurações do Tools.');
   }
 
+  // TEMP(csat-test): rastreio do fallback.
+  const debug = {
+    metabaseKeyConfigured: !!process.env.METABASE_API_KEY,
+    fallbackTriggered: false,
+    fallbackAttempts: 0,
+    fallbackFoundOn: undefined as string | undefined,
+  };
+
   // Busca feedbacks no Metabase
   let allFeedbacks = await fetchMetabaseFeedbacks({ from, to });
 
@@ -90,9 +105,11 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     !opts.from &&
     !opts.to
   ) {
+    debug.fallbackTriggered = true;
     let cursor = new Date(from);
     cursor.setDate(cursor.getDate() - 1);
     for (let i = 0; i < FALLBACK_MAX_DAYS_BACK; i++) {
+      debug.fallbackAttempts++;
       const trialFrom = new Date(cursor);
       trialFrom.setHours(0, 0, 0, 0);
       const trialTo = new Date(cursor);
@@ -103,6 +120,7 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
         from = trialFrom;
         to = trialTo;
         label = formatBR(trialFrom);
+        debug.fallbackFoundOn = label;
         console.log(
           `[csat-reviews] fallback ativo: usando ${label} (${i + 1} dia(s) atrás da janela default)`
         );
@@ -124,6 +142,7 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     return {
       ...emptyResult(dryRun, 'Sem feedbacks no período.'),
       dateCovered: label,
+      _debug: debug,
     };
   }
 
@@ -133,6 +152,7 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
       dateCovered: label,
       summary,
       feedbacks: commented,
+      _debug: debug,
     };
   }
 
@@ -170,5 +190,6 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     dateCovered: label,
     summary,
     feedbacks: commented,
+    _debug: debug,
   };
 }
