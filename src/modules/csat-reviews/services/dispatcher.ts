@@ -1,5 +1,5 @@
 import { CSAT_REVIEWS_CONFIG } from '../config';
-import { CsatFeedback, fetchMetabaseFeedbacks } from './metabaseClient';
+import { CsatFeedback, fetchSkylabFeedbacks } from './skylabClient';
 import { getDispatchWindow, formatBR } from './dateLogic';
 import { buildSummary, summaryMessage, CsatSummary } from './summaryBuilder';
 import { formatFeedbackMessage } from './feedbackMessage';
@@ -12,13 +12,6 @@ export interface DispatchResult {
   summary: CsatSummary;
   feedbacks: CsatFeedback[];
   message?: string;
-  // TEMP(csat-test): diagnóstico do fallback. Remover junto com o resto.
-  _debug?: {
-    metabaseKeyConfigured: boolean;
-    fallbackTriggered: boolean;
-    fallbackAttempts: number;
-    fallbackFoundOn?: string;
-  };
 }
 
 interface DispatchOptions {
@@ -26,15 +19,7 @@ interface DispatchOptions {
   from?: string;
   to?: string;
   now?: Date;
-  // TEMP(csat-test): quando true, se a janela default não tiver feedbacks,
-  // o dispatcher anda pra trás até achar um dia com feedbacks. Remover junto
-  // com o bloco marcado abaixo quando terminar a validação manual.
-  fallbackToLastDayWithFeedbacks?: boolean;
 }
-
-// TEMP(csat-test): limite de dias que o fallback anda pra trás procurando
-// um dia com feedbacks. Evita varredura infinita.
-const FALLBACK_MAX_DAYS_BACK = 30;
 
 function emptyResult(dryRun: boolean, message?: string): DispatchResult {
   return {
@@ -84,51 +69,8 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     return emptyResult(dryRun, 'Canal Slack não configurado nas configurações do Tools.');
   }
 
-  // TEMP(csat-test): rastreio do fallback.
-  const debug = {
-    metabaseKeyConfigured: !!process.env.METABASE_API_KEY,
-    fallbackTriggered: false,
-    fallbackAttempts: 0,
-    fallbackFoundOn: undefined as string | undefined,
-  };
-
-  // Busca feedbacks no Metabase
-  let allFeedbacks = await fetchMetabaseFeedbacks({ from, to });
-
-  // TEMP(csat-test): fallback p/ último dia útil com feedbacks.
-  // Só dispara quando a janela default veio vazia, sem override manual de
-  // from/to e com a flag explicitamente ativa (route /dispatch da API).
-  // Remover este bloco quando terminar a validação manual.
-  if (
-    allFeedbacks.length === 0 &&
-    opts.fallbackToLastDayWithFeedbacks &&
-    !opts.from &&
-    !opts.to
-  ) {
-    debug.fallbackTriggered = true;
-    let cursor = new Date(from);
-    cursor.setDate(cursor.getDate() - 1);
-    for (let i = 0; i < FALLBACK_MAX_DAYS_BACK; i++) {
-      debug.fallbackAttempts++;
-      const trialFrom = new Date(cursor);
-      trialFrom.setHours(0, 0, 0, 0);
-      const trialTo = new Date(cursor);
-      trialTo.setHours(23, 59, 59, 999);
-      const trial = await fetchMetabaseFeedbacks({ from: trialFrom, to: trialTo });
-      if (trial.length > 0) {
-        allFeedbacks = trial;
-        from = trialFrom;
-        to = trialTo;
-        label = formatBR(trialFrom);
-        debug.fallbackFoundOn = label;
-        console.log(
-          `[csat-reviews] fallback ativo: usando ${label} (${i + 1} dia(s) atrás da janela default)`
-        );
-        break;
-      }
-      cursor.setDate(cursor.getDate() - 1);
-    }
-  }
+  // Busca feedbacks no banco read-only da Skylab
+  const allFeedbacks = await fetchSkylabFeedbacks({ from, to });
 
   // Summary inclui todos (com ou sem comentário)
   const summary = buildSummary(allFeedbacks);
@@ -142,7 +84,6 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     return {
       ...emptyResult(dryRun, 'Sem feedbacks no período.'),
       dateCovered: label,
-      _debug: debug,
     };
   }
 
@@ -152,7 +93,6 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
       dateCovered: label,
       summary,
       feedbacks: commented,
-      _debug: debug,
     };
   }
 
@@ -190,6 +130,5 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     dateCovered: label,
     summary,
     feedbacks: commented,
-    _debug: debug,
   };
 }

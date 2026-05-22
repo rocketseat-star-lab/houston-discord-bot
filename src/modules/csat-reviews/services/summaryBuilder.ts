@@ -1,4 +1,4 @@
-import { CsatFeedback } from './metabaseClient';
+import { CsatFeedback } from './skylabClient';
 
 export interface CsatSummary {
   total: number;
