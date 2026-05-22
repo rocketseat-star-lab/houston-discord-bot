@@ -58,6 +58,36 @@ router.get('/_debug/query-raw', async (req, res) => {
   }
 });
 
+// TEMP(csat-test): bate em /api/user/current pra distinguir "chave inválida"
+// (401) de "chave sem permissão na card" (403). Também devolve um hash curto
+// + length da chave pro user conferir se é a mesma que ele editou no Metabase.
+router.get('/_debug/auth', async (_req, res) => {
+  try {
+    const apiKey = process.env.METABASE_API_KEY || '';
+    const crypto = await import('node:crypto');
+    const fingerprint = crypto
+      .createHash('sha256')
+      .update(apiKey)
+      .digest('hex')
+      .slice(0, 12);
+    const r = await axios.get('https://metabase.rocketseat.dev/api/user/current', {
+      headers: { 'x-api-key': apiKey },
+      timeout: 15_000,
+      validateStatus: () => true,
+    });
+    res.json({
+      key_length: apiKey.length,
+      key_sha256_prefix: fingerprint,
+      key_first2: apiKey.slice(0, 2),
+      key_last2: apiKey.slice(-2),
+      status: r.status,
+      body: typeof r.data === 'string' ? r.data : r.data,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'erro', message: err?.message });
+  }
+});
+
 // TEMP(csat-test): endpoint de inspeção dos template tags da card 2525.
 // Remover junto com o resto da diagnose.
 router.get('/_debug/card-meta', async (_req, res) => {
