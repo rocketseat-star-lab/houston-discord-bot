@@ -29,14 +29,12 @@ import { Pool, type QueryResultRow } from 'pg';
  * `apiKeyAuth` em `/api/v1/csat-reviews/dispatch`).
  */
 let pool: Pool | null = null;
-let initErrored = false;
 let warnedMissingUrl = false;
 
 const STATEMENT_TIMEOUT_MS = 15_000;
 
 export function getSkylabPool(): Pool | null {
   if (pool) return pool;
-  if (initErrored) return null;
   const url = process.env.SKYLAB_DATABASE_URL;
   if (!url) {
     if (!warnedMissingUrl) {
@@ -47,21 +45,10 @@ export function getSkylabPool(): Pool | null {
     }
     return null;
   }
-  // Valida o formato cedo. `new Pool` nao falha aqui — a URL so e parseada
-  // no primeiro `connect()`. Sem isso, uma URL malformada (ex.: senha com
-  // caractere especial sem url-encode, faltando `postgres://`) virava
-  // `TypeError: Invalid URL` no meio do dispatcher.
-  try {
-    new URL(url);
-  } catch (err: any) {
-    initErrored = true;
-    console.error(
-      '[skylab-db] SKYLAB_DATABASE_URL com formato invalido:',
-      err?.message ?? err,
-      '— consultas retornarão vazio. Confira o secret do K8s.'
-    );
-    return null;
-  }
+  // Nao validamos a URL com `new URL()` aqui porque o `pg-connection-string`
+  // (usado internamente pelo `pg`) e mais permissivo — ele aceita senhas com
+  // `@`, `#`, `/` sem url-encode pois divide por `@` da direita pra esquerda.
+  // O catch em `connect()` ja expoe erro real se a URL nao for parseavel.
   pool = new Pool({
     connectionString: url,
     max: 5,
