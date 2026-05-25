@@ -37,39 +37,71 @@ interface FeedbackRow {
 /**
  * Busca os feedbacks CSAT diretamente do banco read-only da Skylab.
  *
- * TODO(csat-reviews): substituir o SQL placeholder pela query equivalente à
- * card 2525 do Metabase ("Lista todas as avaliações"). Placeholders já
- * casam com o resto do pipeline:
- *   $1 = from (timestamp inclusivo, início do dia)
- *   $2 = to   (timestamp inclusivo, fim do dia)
- *   $3 = journey_slug (opcional, filtra por jornada se passado)
+ * Equivalente a card 2525 do Metabase ("Lista todas as avaliacoes"):
+ *  - junta `lesson_history_feedback_stars` com user, lesson, journey,
+ *    cluster, module e a string agregada de motivos (`reasons`);
+ *  - filtra pela janela de datas;
+ *  - desempata avaliacoes duplicadas (mesmo user x mesma aula) ficando
+ *    com a mais recente via ROW_NUMBER();
+ *  - ordena por nota ascendente (notas baixas primeiro).
  *
- * As colunas retornadas devem ter exatamente estes aliases:
- *   id, stars, comment, created_at, user_name, lesson_title,
- *   journey_title, cluster_title, module_title, journey_slug, reasons
+ * Parametros:
+ *   $1 = from (timestamp inclusivo)
+ *   $2 = to   (timestamp inclusivo)
+ *   $3 = journey_slug (opcional; null = sem filtro)
  */
-export async function fetchSkylabFeedbacks(opts: FetchOpts): Promise<CsatFeedback[]> {
-  const params: any[] = [opts.from, opts.to];
-  if (opts.journeySlug) params.push(opts.journeySlug);
-
-  // TODO(csat-reviews): trocar pelo SELECT real da card 2525.
-  const sql = `
+const SQL = `
+WITH avaliacoes_unicas AS (
+  SELECT
+    lhfs.id AS id,
+    lhfs.stars AS stars,
+    lhfs.additional_information AS comment,
+    lhfs.created_at AS created_at,
+    CONCAT(u.name, ' (', u.email, ')') AS user_name,
+    lh.title AS lesson_title,
+    j.title AS journey_title,
+    c.title AS cluster_title,
+    lg.title AS module_title,
+    j.slug AS journey_slug,
+    COALESCE(r.reasons_agg, '') AS reasons,
+    ROW_NUMBER() OVER (
+      PARTITION BY lhfs.user_id, lhfs.lesson_history_id
+      ORDER BY lhfs.created_at DESC
+    ) AS rn
+  FROM lesson_history_feedback_stars lhfs
+  JOIN users u ON u.id = lhfs.user_id
+  JOIN lesson_history lh ON lh.id = lhfs.lesson_history_id
+  LEFT JOIN lesson_journeys lj
+    ON lj.lesson_history_id = lhfs.lesson_history_id
+   AND lhfs.journey_id = lj.journey_id
+  LEFT JOIN journeys j ON j.id = lhfs.journey_id
+  LEFT JOIN clusters c ON c.id = lj.cluster_id
+  LEFT JOIN lesson_groups lg ON lg.id = lj.lesson_group_id
+  LEFT JOIN (
     SELECT
-      ''::text AS id,
-      0::int AS stars,
-      ''::text AS comment,
-      now() AS created_at,
-      ''::text AS user_name,
-      ''::text AS lesson_title,
-      NULL::text AS journey_title,
-      NULL::text AS cluster_title,
-      NULL::text AS module_title,
-      NULL::text AS journey_slug,
-      NULL::text AS reasons
-    WHERE false
-  `;
+      fr.lesson_history_feedback_star_id,
+      STRING_AGG(r.text, ', ' ORDER BY r.text ASC) AS reasons_agg
+    FROM feedbacks_reasons fr
+    LEFT JOIN reasons r ON r.id = fr.reason_id
+    GROUP BY fr.lesson_history_feedback_star_id
+  ) r ON r.lesson_history_feedback_star_id = lhfs.id
+  WHERE lhfs.created_at >= $1
+    AND lhfs.created_at <= $2
+    AND lhfs.created_at >= j.released_at
+    AND ($3::text IS NULL OR j.slug = $3)
+)
+SELECT
+  id, stars, comment, created_at,
+  user_name, lesson_title, journey_title,
+  cluster_title, module_title, journey_slug, reasons
+FROM avaliacoes_unicas
+WHERE rn = 1
+ORDER BY stars ASC, created_at DESC
+`;
 
-  const rows = await skylabQuery<FeedbackRow>(sql, params);
+export async function fetchSkylabFeedbacks(opts: FetchOpts): Promise<CsatFeedback[]> {
+  const params: any[] = [opts.from, opts.to, opts.journeySlug ?? null];
+  const rows = await skylabQuery<FeedbackRow>(SQL, params);
   return rows.map((row) => ({
     id: String(row.id),
     stars: Number(row.stars),
