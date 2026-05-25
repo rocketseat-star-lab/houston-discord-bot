@@ -22,27 +22,52 @@ router.get('/_debug/skylab', async (req, res) => {
   // problema de formatacao: comprimento, scheme detectado, se tem espaco/
   // newline, e se `new URL(...)` aceita.
   if (raw) {
+    // Conta caracteres estruturais sem expor user/pass.
+    const afterScheme = raw.replace(/^[a-z]+:\/\//i, '');
+    const atCount = (raw.match(/@/g) || []).length;
+    const lastAtIdx = afterScheme.lastIndexOf('@');
+    // Tudo depois do ultimo `@` = host:port/db?query. Pode mostrar sem leak.
+    const afterAt = lastAtIdx >= 0 ? afterScheme.slice(lastAtIdx + 1) : '<sem @>';
+    // Antes do ultimo `@` = userinfo. So conta sem expor.
+    const userInfo = lastAtIdx >= 0 ? afterScheme.slice(0, lastAtIdx) : '';
+    const colonsInUserInfo = (userInfo.match(/:/g) || []).length;
     out.url_shape = {
       length: raw.length,
       scheme: raw.slice(0, raw.indexOf('://') + 3) || '<sem ://>',
       has_whitespace: /\s/.test(raw),
       has_newline: /\r|\n/.test(raw),
-      first2: raw.slice(0, 2),
-      last2: raw.slice(-2),
+      at_count: atCount,
+      colons_in_userinfo: colonsInUserInfo,
+      // Suspeitas comuns no userinfo: caracteres que `new URL` rejeita mesmo
+      // depois do split por @ da direita. NAO expoem valores.
+      userinfo_has_question: userInfo.includes('?'),
+      userinfo_has_hash: userInfo.includes('#'),
+      userinfo_has_slash: userInfo.includes('/'),
+      userinfo_has_percent: userInfo.includes('%'),
+      userinfo_has_bracket: /[\[\]]/.test(userInfo),
+      after_at_safe: afterAt, // host:port/db?params — pode logar
     };
     try {
-      const u = new URL(raw);
-      out.url_parse = {
-        valid: true,
-        protocol: u.protocol,
-        host: u.host,
-        port: u.port || null,
-        pathname: u.pathname,
-        username_present: !!u.username,
-        password_present: !!u.password,
-      };
+      new URL(raw);
+      out.url_parse = { valid: true };
     } catch (err: any) {
       out.url_parse = { valid: false, error: err?.message };
+    }
+    // Tenta com pg-connection-string explicitamente.
+    try {
+      const { parse } = await import('pg-connection-string');
+      const p = parse(raw);
+      out.pgcs_parse = {
+        valid: true,
+        host: p.host,
+        port: p.port,
+        database: p.database,
+        user_present: !!p.user,
+        password_present: !!p.password,
+        ssl: p.ssl,
+      };
+    } catch (err: any) {
+      out.pgcs_parse = { valid: false, error: err?.message, code: err?.code };
     }
   }
   const pool = getSkylabPool();
