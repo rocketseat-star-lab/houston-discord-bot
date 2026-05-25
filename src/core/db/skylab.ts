@@ -30,8 +30,82 @@ import { Pool, type QueryResultRow } from 'pg';
  */
 let pool: Pool | null = null;
 let warnedMissingUrl = false;
+let warnedInvalidShape = false;
 
 const STATEMENT_TIMEOUT_MS = 15_000;
+
+/**
+ * Parser manual da DSN da Skylab. Existe porque tanto `new URL()` quanto o
+ * `pg-connection-string` (usado por `connectionString:` no pg) rejeitam
+ * senhas contendo caracteres reservados de URL como `#`, `?`, `/` sem
+ * url-encode. Como a Skylab compartilha a mesma senha entre projetos e
+ * outros consumidores nao exigem encode, replicamos esse comportamento
+ * fazendo o split manualmente e passando os campos ja decompostos pro pg
+ * (`user`, `password`, `host`, ...) — bypassa o parser de URL.
+ *
+ * Convencoes do split (vao da esquerda pra direita pra evitar amb. com
+ * caracteres na senha):
+ *   - scheme = ate o primeiro `://`
+ *   - userinfo = entre `://` e o ULTIMO `@`
+ *   - user = ate o PRIMEIRO `:` no userinfo (resto = password, com qualquer
+ *     caractere literal exceto `@`)
+ *   - host[:port] = ate o PRIMEIRO `/` depois do userinfo
+ *   - database = entre o `/` e o `?` (se houver)
+ *   - query = depois do `?`
+ *
+ * Retorna `null` se o shape nao casar com o esperado.
+ */
+interface ParsedDsn {
+  user: string;
+  password: string;
+  host: string;
+  port: number;
+  database: string;
+  ssl: boolean;
+}
+
+function parseSkylabDsn(raw: string): ParsedDsn | null {
+  const schemeMatch = raw.match(/^(postgres(?:ql)?):\/\//i);
+  if (!schemeMatch) return null;
+  const afterScheme = raw.slice(schemeMatch[0].length);
+
+  const lastAt = afterScheme.lastIndexOf('@');
+  if (lastAt === -1) return null;
+  const userInfo = afterScheme.slice(0, lastAt);
+  const hostPart = afterScheme.slice(lastAt + 1);
+
+  const firstColon = userInfo.indexOf(':');
+  if (firstColon === -1) return null;
+  const user = userInfo.slice(0, firstColon);
+  const password = userInfo.slice(firstColon + 1);
+
+  const queryIdx = hostPart.indexOf('?');
+  const beforeQuery = queryIdx >= 0 ? hostPart.slice(0, queryIdx) : hostPart;
+  const query = queryIdx >= 0 ? hostPart.slice(queryIdx + 1) : '';
+
+  const slashIdx = beforeQuery.indexOf('/');
+  if (slashIdx === -1) return null;
+  const hostPort = beforeQuery.slice(0, slashIdx);
+  const database = beforeQuery.slice(slashIdx + 1);
+  if (!database) return null;
+
+  const portColon = hostPort.lastIndexOf(':');
+  const host = portColon >= 0 ? hostPort.slice(0, portColon) : hostPort;
+  const port =
+    portColon >= 0 ? Number.parseInt(hostPort.slice(portColon + 1), 10) || 5432 : 5432;
+  if (!host) return null;
+
+  // Detecta ssl tanto via `?ssl=true` quanto `?sslmode=require|prefer|verify-*`.
+  const params = new URLSearchParams(query);
+  const sslmode = (params.get('sslmode') || '').toLowerCase();
+  const ssl =
+    params.get('ssl') === 'true' ||
+    sslmode === 'require' ||
+    sslmode === 'prefer' ||
+    sslmode.startsWith('verify-');
+
+  return { user, password, host, port, database, ssl };
+}
 
 export function getSkylabPool(): Pool | null {
   if (pool) return pool;
@@ -45,12 +119,28 @@ export function getSkylabPool(): Pool | null {
     }
     return null;
   }
-  // Nao validamos a URL com `new URL()` aqui porque o `pg-connection-string`
-  // (usado internamente pelo `pg`) e mais permissivo — ele aceita senhas com
-  // `@`, `#`, `/` sem url-encode pois divide por `@` da direita pra esquerda.
-  // O catch em `connect()` ja expoe erro real se a URL nao for parseavel.
+  const parsed = parseSkylabDsn(url);
+  if (!parsed) {
+    if (!warnedInvalidShape) {
+      console.error(
+        '[skylab-db] SKYLAB_DATABASE_URL com shape inesperado — confira scheme/@/`/`. Consultas retornarão vazio.'
+      );
+      warnedInvalidShape = true;
+    }
+    return null;
+  }
   pool = new Pool({
-    connectionString: url,
+    user: parsed.user,
+    password: parsed.password,
+    host: parsed.host,
+    port: parsed.port,
+    database: parsed.database,
+    // AWS RDS usa CA propria que nao esta na trust-store padrao do Node.
+    // `rejectUnauthorized: false` aceita a TLS sem validar o CA — adequado
+    // pra esse caso (a leitura ja eh read-only e a conexao continua
+    // criptografada). Se um dia quiserem hardening, basta plugar o bundle
+    // da Amazon aqui.
+    ssl: parsed.ssl ? { rejectUnauthorized: false } : false,
     max: 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
