@@ -29,12 +29,14 @@ import { Pool, type QueryResultRow } from 'pg';
  * `apiKeyAuth` em `/api/v1/csat-reviews/dispatch`).
  */
 let pool: Pool | null = null;
+let initErrored = false;
 let warnedMissingUrl = false;
 
 const STATEMENT_TIMEOUT_MS = 15_000;
 
 export function getSkylabPool(): Pool | null {
   if (pool) return pool;
+  if (initErrored) return null;
   const url = process.env.SKYLAB_DATABASE_URL;
   if (!url) {
     if (!warnedMissingUrl) {
@@ -43,6 +45,21 @@ export function getSkylabPool(): Pool | null {
       );
       warnedMissingUrl = true;
     }
+    return null;
+  }
+  // Valida o formato cedo. `new Pool` nao falha aqui — a URL so e parseada
+  // no primeiro `connect()`. Sem isso, uma URL malformada (ex.: senha com
+  // caractere especial sem url-encode, faltando `postgres://`) virava
+  // `TypeError: Invalid URL` no meio do dispatcher.
+  try {
+    new URL(url);
+  } catch (err: any) {
+    initErrored = true;
+    console.error(
+      '[skylab-db] SKYLAB_DATABASE_URL com formato invalido:',
+      err?.message ?? err,
+      '— consultas retornarão vazio. Confira o secret do K8s.'
+    );
     return null;
   }
   pool = new Pool({
@@ -77,7 +94,21 @@ export async function skylabQuery<T extends QueryResultRow = QueryResultRow>(
   assertReadOnlyShape(sql);
   const p = getSkylabPool();
   if (!p) return [];
-  const client = await p.connect();
+  // `connect()` pode falhar com URL invalida, host inalcancavel, credenciais
+  // erradas etc. Tratamos como "DB indisponivel" e retornamos [] — o
+  // dispatcher devolve "Sem feedbacks no período" pro front. Erros ficam
+  // visiveis no log do pod pra o TL diagnosticar.
+  let client;
+  try {
+    client = await p.connect();
+  } catch (err: any) {
+    console.error(
+      '[skylab-db] connect error:',
+      err?.code ?? '',
+      err?.message ?? err
+    );
+    return [];
+  }
   try {
     await client.query('BEGIN READ ONLY');
     await client.query(`SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`);
