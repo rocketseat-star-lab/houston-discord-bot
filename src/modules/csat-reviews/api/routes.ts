@@ -16,11 +16,39 @@ router.use(apiKeyAuth);
 // Remover depois que estabilizar.
 router.get('/_debug/skylab', async (req, res) => {
   const out: Record<string, any> = {};
-  out.url_configured = !!process.env.SKYLAB_DATABASE_URL;
+  const raw = process.env.SKYLAB_DATABASE_URL || '';
+  out.url_configured = !!raw;
+  // Sem expor a URL inteira. So caracteristicas que ajudam a diagnosticar
+  // problema de formatacao: comprimento, scheme detectado, se tem espaco/
+  // newline, e se `new URL(...)` aceita.
+  if (raw) {
+    out.url_shape = {
+      length: raw.length,
+      scheme: raw.slice(0, raw.indexOf('://') + 3) || '<sem ://>',
+      has_whitespace: /\s/.test(raw),
+      has_newline: /\r|\n/.test(raw),
+      first2: raw.slice(0, 2),
+      last2: raw.slice(-2),
+    };
+    try {
+      const u = new URL(raw);
+      out.url_parse = {
+        valid: true,
+        protocol: u.protocol,
+        host: u.host,
+        port: u.port || null,
+        pathname: u.pathname,
+        username_present: !!u.username,
+        password_present: !!u.password,
+      };
+    } catch (err: any) {
+      out.url_parse = { valid: false, error: err?.message };
+    }
+  }
   const pool = getSkylabPool();
   out.pool_initialized = !!pool;
   if (!pool) {
-    return res.json({ ...out, error: 'pool nulo — veja logs do pod por motivo' });
+    return res.json(out);
   }
   // 1. trivial connection check
   try {
