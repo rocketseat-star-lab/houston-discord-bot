@@ -57,14 +57,13 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     label = window.label;
   }
 
-  // Config from Tools (channel + enabled)
+  // Config from Tools — o dispatcher precisa apenas do canal. O flag
+  // `enabled` controla so o cron e e checado no scheduler antes de chamar
+  // o dispatcher, nao aqui. Assim o botao "Enviar agora" do Tools sempre
+  // dispara quando clicado, sem depender do toggle.
   const config = await getCsatReviewsConfig();
-  const enabled = config?.enabled ?? false;
   const slackChannelId = config?.slackChannelId || '';
 
-  if (!dryRun && !enabled) {
-    return emptyResult(dryRun, 'Envio automático desativado nas configurações do Tools.');
-  }
   if (!dryRun && !slackChannelId) {
     return emptyResult(dryRun, 'Canal Slack não configurado nas configurações do Tools.');
   }

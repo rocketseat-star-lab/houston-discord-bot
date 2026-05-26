@@ -2,6 +2,7 @@ import type { FeatureModule } from '../../core/module';
 import { closeSkylabPool } from '../../core/db/skylab';
 import { CSAT_REVIEWS_CONFIG } from './config';
 import { dispatchCsatReviews } from './services/dispatcher';
+import { getCsatReviewsConfig } from './services/toolsConfigClient';
 import routes from './api/routes';
 
 export const csatReviewsModule: FeatureModule = {
@@ -16,7 +17,16 @@ export const csatReviewsModule: FeatureModule = {
       name: 'daily-dispatch',
       cron: CSAT_REVIEWS_CONFIG.cron,
       timezone: CSAT_REVIEWS_CONFIG.timezone,
+      // O scheduler checa o flag `enabled` por conta propria. O dispatcher
+      // nao gateia mais por esse flag — assim o botao "Enviar agora" do
+      // Tools sempre executa quando acionado manualmente, sem depender do
+      // toggle de envio automatico.
       handler: async () => {
+        const config = await getCsatReviewsConfig();
+        if (!config?.enabled) {
+          console.log('[csat-reviews] Daily dispatch skipped: envio automático desativado');
+          return;
+        }
         const result = await dispatchCsatReviews();
         console.log(
           `[csat-reviews] Daily dispatch: dateCovered=${result.dateCovered} feedbacks=${result.feedbacks.length} dryRun=${result.dryRun}`
