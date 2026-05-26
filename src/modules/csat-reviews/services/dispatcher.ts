@@ -95,25 +95,32 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
     };
   }
 
-  // Cria thread no Slack: mensagem-pai (resumo) + replies (um por feedback).
-  // Cada execução do dispatcher cria uma thread nova (postParent gera um novo ts).
+  // Cria thread no Slack:
+  //  - mensagem-pai (no canal): so o titulo, pra ficar enxuto no feed;
+  //  - primeira reply na thread: o resumo (total, distribuicao, etc);
+  //  - replies seguintes: um por feedback com comentario.
+  // Cada execucao do dispatcher cria uma thread nova (postParent gera um novo ts).
   const isSingleDay = from.toDateString() === to.toDateString();
   const threadTitle = isSingleDay
     ? `*Feedbacks - dia ${formatBR(from)}*`
     : `*Feedbacks - ${formatBR(from)} a ${formatBR(to)}*`;
 
-  const parentText = [
-    threadTitle,
-    '',
-    summaryMessage({ dateLabel: label, summary }),
-  ].join('\n');
-
-  const parentTs = await slackPublisher.postParent(slackChannelId, parentText);
+  const parentTs = await slackPublisher.postParent(slackChannelId, threadTitle);
   if (!parentTs) {
     return {
       ...emptyResult(dryRun, 'Falha ao criar a mensagem-pai no Slack.'),
       dateCovered: label,
     };
+  }
+
+  try {
+    await slackPublisher.postReply(
+      slackChannelId,
+      parentTs,
+      summaryMessage({ dateLabel: label, summary })
+    );
+  } catch (err) {
+    console.error('[csat-reviews] failed to post summary reply:', err);
   }
 
   for (const f of commented) {
