@@ -46,6 +46,42 @@ export const toolsClient = {
     }).catch((err) => console.error('[celebrations] updateBoosterSlackId failed:', err));
   },
 
+  /**
+   * Persiste no Tools o resultado da resolucao Slack: slackUserId e/ou
+   * avatarUrl, com timestamp. Passar `null` em algum campo significa
+   * "tentei resolver e nao achei" — diferente de nao passar (que mantem
+   * o valor atual). O Tools usa isso pra calcular o status na UI.
+   */
+  async updateBoosterSlackData(
+    id: string,
+    data: { slackUserId?: string | null; avatarUrl?: string | null }
+  ): Promise<void> {
+    const key = apiKey();
+    if (!key) return;
+    await fetch(`${baseUrl()}/api/hr/internal/boosters/${id}/slack-data`, {
+      method: 'PATCH',
+      headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, resolvedAt: new Date().toISOString() }),
+    }).catch((err) => console.error('[celebrations] updateBoosterSlackData failed:', err));
+  },
+
+  /**
+   * Lista todos os boosters ativos. Usado pelo refresh de avatares.
+   */
+  async listActiveBoosters(): Promise<BoosterDTO[]> {
+    const key = apiKey();
+    if (!key) return [];
+    const res = await fetch(`${baseUrl()}/api/hr/internal/boosters/active`, {
+      headers: { 'x-api-key': key },
+    });
+    if (!res.ok) {
+      console.error(`[celebrations] toolsClient.listActiveBoosters ${res.status}`);
+      return [];
+    }
+    const body = (await res.json()) as { items: BoosterDTO[] };
+    return body.items || [];
+  },
+
   async getCelebrationsConfig(): Promise<{ enabled: boolean; slackChannelId: string | null } | null> {
     const key = apiKey();
     if (!key) return null;

@@ -17,15 +17,26 @@ async function resolveSlackIdsAndAvatars(boosters: BoosterDTO[]): Promise<Resolv
 
     if (!slackId) {
       slackId = await slackClient.lookupUserIdByEmail(b.email);
-      if (slackId) {
-        await toolsClient.updateBoosterSlackId(b.id, slackId);
-      } else {
+      if (!slackId) {
+        // Persiste o "nao achei" pra UI do Tools mostrar como "email nao
+        // encontrado no Slack" (vermelho) ate o RH corrigir.
+        await toolsClient.updateBoosterSlackData(b.id, {
+          slackUserId: null,
+          avatarUrl: null,
+        });
         console.warn(`[celebrations] Booster "${b.full_name}" (${b.email}) sem usuario no Slack.`);
         continue;
       }
     }
 
     const avatarUrl = await slackClient.getUserImageUrl(slackId);
+    // Persiste o resultado (mesmo que avatarUrl seja null) pra dar
+    // visibilidade no painel de boosters.
+    await toolsClient.updateBoosterSlackData(b.id, {
+      slackUserId: slackId,
+      avatarUrl: avatarUrl ?? null,
+    });
+
     if (!avatarUrl) {
       console.warn(`[celebrations] Booster "${b.full_name}" sem avatar no Slack.`);
       continue;

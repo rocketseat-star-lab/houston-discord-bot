@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { apiKeyAuth } from '../../../api/middlewares/apiKeyAuth';
 import { dispatchCelebrations } from '../services/dispatcher';
 import { toolsClient } from '../services/toolsClient';
+import { slackClient } from '../services/slackClient';
 
 const router = Router();
 
@@ -61,6 +62,56 @@ router.post('/dispatch', async (req, res) => {
   } catch (err: any) {
     console.error('[celebrations] /dispatch error:', err);
     res.status(500).json({ error: err?.message || 'Erro ao executar dispatcher' });
+  }
+});
+
+/**
+ * POST /api/v1/celebrations/refresh-avatars
+ *
+ * Itera os boosters ativos e, pra cada um, tenta resolver slack_user_id
+ * (via email se preciso) e o avatar via users.info. O resultado e
+ * persistido no Tools — inclusive nulls, pra UI conseguir distinguir
+ * "ainda nao tentou" de "tentou e nao achou".
+ *
+ * Roda sequencialmente pra nao estourar rate limit do Slack (tier 2,
+ * ~20 req/min em users.info e users.lookupByEmail).
+ */
+router.post('/refresh-avatars', async (_req, res) => {
+  try {
+    const boosters = await toolsClient.listActiveBoosters();
+    const summary = {
+      total: boosters.length,
+      withAvatar: 0,
+      withoutAvatar: 0,
+      withoutSlackUser: 0,
+    };
+
+    for (const b of boosters) {
+      let slackId = b.slack_user_id;
+      if (!slackId) {
+        slackId = await slackClient.lookupUserIdByEmail(b.email);
+      }
+      if (!slackId) {
+        await toolsClient.updateBoosterSlackData(b.id, {
+          slackUserId: null,
+          avatarUrl: null,
+        });
+        summary.withoutSlackUser++;
+        continue;
+      }
+      const avatarUrl = await slackClient.getUserImageUrl(slackId);
+      await toolsClient.updateBoosterSlackData(b.id, {
+        slackUserId: slackId,
+        avatarUrl: avatarUrl ?? null,
+      });
+      if (avatarUrl) summary.withAvatar++;
+      else summary.withoutAvatar++;
+    }
+
+    res.json(summary);
+  } catch (err: any) {
+    console.error('[celebrations] /refresh-avatars error:', err);
+    res.status(500).json({ error: err?.message || 'Erro ao atualizar avatares' });
   }
 });
 
