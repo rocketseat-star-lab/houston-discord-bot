@@ -173,13 +173,16 @@ export const moderationModule: FeatureModule = {
   routes: moderationRoutes,
   async initialize() {
     console.log('[moderation] Loading moderation rules from backend...');
-    // 10 retries x 5s = up to 50s of tolerance for backend cold start.
-    await moderationRuleCache.fetchAndLoadRules(10, 5000);
+    // 10 retries com backoff exponencial (1s -> 30s) e timeout de 30s
+    // por chamada. Cobre cold start do Vercel sem desistir cedo. Veja
+    // `fetchAndLoadRules` em moderationRuleCache.ts.
+    await moderationRuleCache.fetchAndLoadRules(10);
     console.log('[moderation] Moderation rules loading completed');
 
-    // Background sync every 5 minutes — auto-recovery if a deploy or
-    // transient outage left the cache stale.
-    moderationRuleCache.startBackgroundSync(5 * 60 * 1000);
+    // Background sync adaptativo: enquanto o cache estiver vazio,
+    // tenta a cada 30s (recuperacao agressiva pos-deploy); depois que
+    // popular, espaca pra 5min de steady state.
+    moderationRuleCache.startBackgroundSync(5 * 60 * 1000, 30 * 1000);
   },
 
   async shutdown() {

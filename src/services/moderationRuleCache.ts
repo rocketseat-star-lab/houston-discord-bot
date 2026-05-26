@@ -32,9 +32,35 @@ export class ModerationRuleCache {
   private inFlightFetch: Promise<void> | null = null;
 
   /**
-   * Busca regras do backend e carrega automaticamente com retry
+   * Aquece a Vercel batendo no /api/health antes de chamar o endpoint de
+   * regras. Sem isso, a primeira chamada (a "de verdade") absorve o
+   * tempo do cold-start (10-30s) e estoura nosso timeout. O ping de
+   * health responde em <500ms quando warm e dispara o cold-start de
+   * forma "barata".
    */
-  async fetchAndLoadRules(maxRetries: number = 3, delayMs: number = 2000): Promise<void> {
+  private async warmUpBackend(backendUrl: string): Promise<void> {
+    try {
+      await axios.get(`${backendUrl}/api/health`, { timeout: 30_000 });
+    } catch (err: any) {
+      // Falhar aqui nao impede a tentativa real — so loga.
+      console.warn(
+        '[ModerationRuleCache] Warmup ping falhou (ok, vamos tentar a fetch mesmo assim):',
+        err?.message ?? err
+      );
+    }
+  }
+
+  /**
+   * Busca regras do backend e carrega automaticamente com retry e backoff
+   * exponencial. Timeout generoso (30s) por chamada pra absorver cold
+   * start do Vercel — o sintoma classico de "deploy do bot e moderacao
+   * para de funcionar" e exatamente esse: 5s nao basta pra acordar a
+   * Vercel, todos os retries estouram, cache fica vazio.
+   *
+   * Cada attempt: 30s de timeout. Entre attempts, espera com backoff
+   * 1s, 2s, 4s, 8s, 16s, 30s, 30s, 30s... (cap em 30s).
+   */
+  async fetchAndLoadRules(maxRetries: number = 10, _legacyDelayMs?: number): Promise<void> {
     const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
     const apiKey = process.env.INTERNAL_API_KEY;
 
@@ -43,45 +69,51 @@ export class ModerationRuleCache {
       return;
     }
 
-    let lastError: any = null;
+    // Endpoint dedicado: retorna TODAS as regras ativas, sem paginacao.
+    // Trocamos do antigo `/internal/rules` (paginado, default limit=20)
+    // que historicamente cortava regras silenciosamente.
+    const rulesUrl = `${backendUrl}/api/moderation/internal/rules/sync-payload`;
+
+    await this.warmUpBackend(backendUrl);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[ModerationRuleCache] Fetching rules from backend (attempt ${attempt}/${maxRetries})...`);
-
-        const response = await axios.get(`${backendUrl}/api/moderation/internal/rules?enabled=true`, {
-          headers: {
-            'x-api-key': apiKey,
-          },
-          timeout: 5000,
+        console.log(`[ModerationRuleCache] Fetching rules (attempt ${attempt}/${maxRetries})...`);
+        const response = await axios.get(rulesUrl, {
+          headers: { 'x-api-key': apiKey },
+          timeout: 30_000,
         });
 
         const rules = response.data.rules || [];
         await this.loadRules(rules);
 
-        console.log(`[ModerationRuleCache] ✅ Successfully fetched and loaded ${rules.length} rules`);
-        return; // Success - exit
+        console.log(
+          `[ModerationRuleCache] ✅ Successfully fetched and loaded ${rules.length} rules`
+        );
+        return;
       } catch (error: any) {
-        lastError = error;
-        console.error(`[ModerationRuleCache] ❌ Attempt ${attempt}/${maxRetries} failed:`, {
-          message: error.message,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          url: `${backendUrl}/api/moderation/internal/rules`,
-        });
+        console.error(
+          `[ModerationRuleCache] ❌ Attempt ${attempt}/${maxRetries} failed:`,
+          {
+            message: error.message,
+            code: error.code,
+            status: error.response?.status,
+          }
+        );
 
-        // Wait before retrying (except on last attempt)
         if (attempt < maxRetries) {
-          console.log(`[ModerationRuleCache] ⏳ Retrying in ${delayMs}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delayMs));
+          // Backoff exponencial: 1s, 2s, 4s, 8s, 16s, 30s, 30s, ...
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 30_000);
+          console.log(`[ModerationRuleCache] ⏳ Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    // All retries failed
     console.error('[ModerationRuleCache] ❌ Failed to fetch rules after all retries');
-    console.error('[ModerationRuleCache] ⚠️ Auto-moderation will NOT work until rules are synced manually');
+    console.error(
+      '[ModerationRuleCache] ⚠️ Background sync continua tentando — moderacao ficara degradada ate sincronizar'
+    );
   }
 
   /**
@@ -150,24 +182,52 @@ export class ModerationRuleCache {
   }
 
   /**
-   * Inicia um polling em background que refaz fetch das regras periodicamente.
-   * Idempotente — chamadas extras são ignoradas.
+   * Background sync ADAPTATIVO:
+   *  - enquanto o cache esta vazio (sincronia inicial falhou), tenta a
+   *    cada `emptyIntervalMs` (default 30s) — recupera rapido depois de
+   *    incidente transitorio sem precisar de sync manual;
+   *  - depois que popular, espaca pra `steadyIntervalMs` (default 5min)
+   *    pra nao bater no Tools sem necessidade.
+   *
+   * Idempotente — chamadas extras sao ignoradas.
    */
-  startBackgroundSync(intervalMs: number = 5 * 60 * 1000): void {
+  startBackgroundSync(
+    steadyIntervalMs: number = 5 * 60 * 1000,
+    emptyIntervalMs: number = 30 * 1000
+  ): void {
     if (this.backgroundIntervalId) return;
     console.log(
-      `[ModerationRuleCache] Background sync iniciado (intervalo: ${intervalMs / 1000}s)`
+      `[ModerationRuleCache] Background sync iniciado (vazio=${emptyIntervalMs / 1000}s, populado=${steadyIntervalMs / 1000}s)`
     );
-    this.backgroundIntervalId = setInterval(() => {
-      this.fetchAndLoadRules(2, 2000).catch((err) => {
+
+    const tick = async () => {
+      try {
+        const wasEmpty = this.rules.size === 0;
+        await this.fetchAndLoadRules(wasEmpty ? 5 : 2);
+      } catch (err) {
         console.error('[ModerationRuleCache] Background sync error:', err);
-      });
-    }, intervalMs);
+      } finally {
+        // Reprograma o proximo tick conforme o estado atual do cache.
+        if (this.backgroundIntervalId !== null) {
+          this.backgroundIntervalId = setTimeout(
+            tick,
+            this.rules.size === 0 ? emptyIntervalMs : steadyIntervalMs
+          );
+        }
+      }
+    };
+
+    // Marca como ativo antes do primeiro tick (setTimeout retorna a ref
+    // mas tick e async). Usa um placeholder truthy que o tick substitui.
+    this.backgroundIntervalId = setTimeout(
+      tick,
+      this.rules.size === 0 ? emptyIntervalMs : steadyIntervalMs
+    );
   }
 
   stopBackgroundSync(): void {
     if (this.backgroundIntervalId) {
-      clearInterval(this.backgroundIntervalId);
+      clearTimeout(this.backgroundIntervalId);
       this.backgroundIntervalId = null;
     }
   }
@@ -182,7 +242,7 @@ export class ModerationRuleCache {
       await this.inFlightFetch;
       return;
     }
-    this.inFlightFetch = this.fetchAndLoadRules(3, 1500).finally(() => {
+    this.inFlightFetch = this.fetchAndLoadRules(3).finally(() => {
       this.inFlightFetch = null;
     });
     await this.inFlightFetch;
