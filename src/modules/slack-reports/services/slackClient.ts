@@ -86,6 +86,33 @@ export async function addReaction(opts: {
   }
 }
 
+/**
+ * Dado o ts de uma mensagem qualquer da thread (parent OU reply), retorna
+ * o `thread_ts` (= ts da mensagem-pai). Usa `conversations.history` com
+ * `latest` + `inclusive` pra pegar so a mensagem alvo. Se ela tiver
+ * `thread_ts` setado, e uma reply — retorna o thread_ts dela. Caso
+ * contrario, a propria mensagem e o parent — retorna seu ts.
+ */
+export async function resolveThreadTs(opts: {
+  channel: string;
+  messageTs: string;
+}): Promise<string | null> {
+  try {
+    const r = await getClient().conversations.history({
+      channel: opts.channel,
+      latest: opts.messageTs,
+      inclusive: true,
+      limit: 1,
+    });
+    const msg: any = r.messages?.[0];
+    if (!msg) return null;
+    return String(msg.thread_ts ?? msg.ts);
+  } catch (err: any) {
+    console.error('[slack-reports] resolveThreadTs error:', err?.data ?? err);
+    return null;
+  }
+}
+
 export async function getPermalink(opts: {
   channel: string;
   messageTs: string;

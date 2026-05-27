@@ -166,11 +166,17 @@ export async function processResolution(opts: {
 
   await createReportEmbedding(report.id, embeddingText);
 
-  // Reage com checkmark na propria mensagem-pai pra confirmar visualmente
-  // que o bot processou — equivalente ao `confirmDocumentation` do Discord.
+  // Reage com checkmark na DESCRICAO (primeira reply nao-bot da thread)
+  // em vez da mensagem-pai. Motivo: o canal mostra so a mensagem-pai sem
+  // abrir a thread; ✅ visivel ali confundiria quem passa olhando o canal
+  // (parece que o bug foi resolvido na hora pelo proprio autor). Colocar
+  // dentro da thread mantem o sinal de "documentado" sem poluir o feed.
+  // Fallback pra mensagem-pai apenas se a thread tiver so o titulo (caso
+  // raro — quem reagiu sem ter descrito o problema).
+  const firstReplyTs = content.replies.find((m) => !m.isBot)?.ts;
   await addReaction({
     channel,
-    timestamp: threadTs,
+    timestamp: firstReplyTs ?? threadTs,
     name: SLACK_REPORTS_CONFIG.resolutionReaction,
   });
 

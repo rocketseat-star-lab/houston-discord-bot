@@ -3,7 +3,7 @@ import { SLACK_REPORTS_CONFIG } from '../config';
 import { verifySlackSignature } from '../services/signatureVerifier';
 import { processNewSlackThread, processResolution } from '../services/threadProcessor';
 import { ThreadDebouncer } from '../services/threadDebouncer';
-import { updateMessage } from '../services/slackClient';
+import { updateMessage, resolveThreadTs } from '../services/slackClient';
 import {
   buildSimilarYesAcknowledged,
   buildSimilarNoAcknowledged,
@@ -142,19 +142,30 @@ router.post(
       return;
     }
 
-    // Reaction de resolucao na mensagem-pai.
+    // Reaction de resolucao em qualquer mensagem da thread (parent OU
+    // reply). Resolvemos o thread_ts via API porque o evento traz so o
+    // ts da mensagem reagida, sem indicar se ela e pai ou filha.
     if (
       event.type === 'reaction_added' &&
       event.reaction === SLACK_REPORTS_CONFIG.resolutionReaction &&
       event.item?.type === 'message' &&
       event.item.channel === SLACK_REPORTS_CONFIG.channelId
     ) {
-      // event.item.ts e o ts da mensagem reagida. Se for mensagem-pai
-      // de thread, esse ts e o thread_ts.
-      void processResolution({
-        channel: event.item.channel,
-        threadTs: event.item.ts,
-      }).catch((err) =>
+      const reactedChannel = event.item.channel;
+      const reactedTs = event.item.ts;
+      void (async () => {
+        const threadTs = await resolveThreadTs({
+          channel: reactedChannel,
+          messageTs: reactedTs,
+        });
+        if (!threadTs) {
+          console.warn(
+            `[slack-reports] resolveThreadTs nao retornou nada pra ${reactedChannel}/${reactedTs}`
+          );
+          return;
+        }
+        await processResolution({ channel: reactedChannel, threadTs });
+      })().catch((err) =>
         console.error('[slack-reports] processResolution falhou:', err)
       );
       return;
