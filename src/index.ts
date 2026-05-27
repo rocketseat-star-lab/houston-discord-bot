@@ -65,6 +65,15 @@ const app = express();
 const PORT = process.env.API_PORT || 3000;
 
 app.set('discordClient', client);
+
+// --- Slack-reports: rotas montadas ANTES do `express.json()` porque o
+//     verificador de assinatura precisa do body bruto (Buffer). Se o
+//     json parser global rodar antes, ele consome o stream e o
+//     `express.raw()` no nivel da rota recebe Buffer vazio. As rotas
+//     internamente fazem o parse manual.
+import { setupSlackReports } from './modules/slack-reports/index';
+setupSlackReports(app);
+
 app.use(express.json());
 
 const allowedOrigins = [
@@ -101,13 +110,6 @@ app.use('/api/v1/guilds', apiKeyAuth, guildsRoutes);
 app.use('/api/v1/webhooks', apiKeyAuth, webhooksRoutes);
 app.use('/api/v1/dm', apiKeyAuth, dmRoutes);
 app.use('/api/v1/jobs', apiKeyAuth, jobsRoutes);
-
-// --- Slack-reports: rotas montadas fora do dispatcher porque precisam
-//     de middleware proprio (raw body + verificacao de assinatura do
-//     Slack), enquanto o dispatcher forca `apiKeyAuth`. Tem que vir
-//     antes de `registerModules` so pra deixar explicito o motivo.
-import { setupSlackReports } from './modules/slack-reports/index';
-setupSlackReports(app);
 
 // --- Register Feature Modules (event handlers, module API routes, schedulers) ---
 registerModules(client, app, modules);
