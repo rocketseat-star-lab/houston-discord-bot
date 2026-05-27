@@ -102,6 +102,13 @@ app.use('/api/v1/webhooks', apiKeyAuth, webhooksRoutes);
 app.use('/api/v1/dm', apiKeyAuth, dmRoutes);
 app.use('/api/v1/jobs', apiKeyAuth, jobsRoutes);
 
+// --- Slack-reports: rotas montadas fora do dispatcher porque precisam
+//     de middleware proprio (raw body + verificacao de assinatura do
+//     Slack), enquanto o dispatcher forca `apiKeyAuth`. Tem que vir
+//     antes de `registerModules` so pra deixar explicito o motivo.
+import { setupSlackReports } from './modules/slack-reports/index';
+setupSlackReports(app);
+
 // --- Register Feature Modules (event handlers, module API routes, schedulers) ---
 registerModules(client, app, modules);
 
@@ -115,8 +122,11 @@ client.once('ready', async (readyClient) => {
 });
 
 // --- Graceful Shutdown ---
+import { teardownSlackReports } from './modules/slack-reports/index';
+
 async function gracefulShutdown(signal: string) {
   console.log(`\n[shutdown] Received ${signal}, shutting down gracefully...`);
+  teardownSlackReports();
   await shutdownModules(modules);
   client.destroy();
   process.exit(0);

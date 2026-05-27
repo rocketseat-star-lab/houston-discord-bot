@@ -25,7 +25,10 @@ async function onThreadCreate(thread: ThreadChannel): Promise<void> {
     const content = await extractThreadContent(thread);
     const combinedText = combineForEmbedding(content.title, content.description);
 
-    const similarReports = await findSimilarReports(combinedText, thread.id);
+    const similarReports = await findSimilarReports(combinedText, {
+      platform: 'DISCORD',
+      excludeDiscordThreadId: thread.id,
+    });
 
     if (similarReports.length > 0) {
       console.log(`[reports] Found ${similarReports.length} similar reports`);
@@ -92,6 +95,7 @@ async function onThreadUpdate(oldThread: ThreadChannel, newThread: ThreadChannel
       } else {
         const starterMessage = await newThread.fetchStarterMessage();
         report = await createReport({
+          platform: 'DISCORD',
           discordThreadId: newThread.id,
           discordUserId: starterMessage?.author?.id || 'unknown',
           title: content.title.replace(CHECKMARK_EMOJI, '').trim(),

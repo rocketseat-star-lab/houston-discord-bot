@@ -1,0 +1,201 @@
+import express, { Router, Request, Response } from 'express';
+import { SLACK_REPORTS_CONFIG } from '../config';
+import { verifySlackSignature } from '../services/signatureVerifier';
+import { processNewSlackThread, processResolution } from '../services/threadProcessor';
+import { ThreadDebouncer } from '../services/threadDebouncer';
+import { updateMessage } from '../services/slackClient';
+import {
+  buildSimilarYesAcknowledged,
+  buildSimilarNoAcknowledged,
+} from '../services/messageBuilder';
+
+// Singleton de debouncer pro modulo. Vive enquanto o pod estiver no ar —
+// se o pod reiniciar com threads em janela aberta, a primeira mensagem
+// do usuario pos-restart re-agenda; pior caso e o bot processar 15s
+// depois ao inves de em tempo real.
+const debouncer = new ThreadDebouncer(
+  SLACK_REPORTS_CONFIG.threadDebounceMs,
+  async (key) => {
+    const [channel, threadTs] = key.split(':');
+    if (!channel || !threadTs) return;
+    await processNewSlackThread({ channel, threadTs });
+  }
+);
+
+export function shutdownSlackReports(): void {
+  debouncer.shutdown();
+}
+
+const router = Router();
+
+// Captura body BRUTO em string — necessario pra verificar a assinatura
+// HMAC antes do JSON.parse. Slack manda content-type
+// `application/json` (Events) ou `application/x-www-form-urlencoded`
+// (Interactions); o raw middleware tipa-agnostic resolve os dois.
+const rawParser = express.raw({ type: '*/*', limit: '1mb' });
+
+function getRawBody(req: Request): string {
+  // express.raw deixa o body como Buffer
+  const buf = req.body as Buffer;
+  return buf ? buf.toString('utf8') : '';
+}
+
+/**
+ * Wrapper de signature verification: se a assinatura nao bate, responde
+ * 401 sem chamar o handler. Se bater, parseia o JSON/form e segue.
+ */
+function verified(
+  parse: 'json' | 'form',
+  handler: (req: Request, res: Response, parsed: any) => Promise<void>
+) {
+  return async (req: Request, res: Response) => {
+    const raw = getRawBody(req);
+    const result = verifySlackSignature({
+      signingSecret: SLACK_REPORTS_CONFIG.signingSecret,
+      timestampHeader: req.header('x-slack-request-timestamp') ?? undefined,
+      signatureHeader: req.header('x-slack-signature') ?? undefined,
+      rawBody: raw,
+    });
+    if (!result.valid) {
+      console.warn('[slack-reports] Assinatura invalida:', result.reason);
+      res.status(401).send('invalid signature');
+      return;
+    }
+
+    let parsed: any;
+    if (parse === 'json') {
+      try {
+        parsed = raw ? JSON.parse(raw) : {};
+      } catch {
+        res.status(400).send('invalid json');
+        return;
+      }
+    } else {
+      // form: `payload=...` urlencoded → payload e JSON string
+      const params = new URLSearchParams(raw);
+      try {
+        parsed = JSON.parse(params.get('payload') ?? '{}');
+      } catch {
+        res.status(400).send('invalid form payload');
+        return;
+      }
+    }
+
+    try {
+      await handler(req, res, parsed);
+    } catch (err) {
+      console.error('[slack-reports] handler error:', err);
+      if (!res.headersSent) res.status(500).send('error');
+    }
+  };
+}
+
+/**
+ * POST /api/v1/slack-reports/events
+ *
+ * Recebe eventos do Slack Events API. Slack tem timeout de 3s entao
+ * respondemos 200 imediatamente e processamos em background (`void` no
+ * promise das chamadas async).
+ */
+router.post(
+  '/events',
+  rawParser,
+  verified('json', async (_req, res, body) => {
+    // URL verification challenge — quando o Slack admin configura a URL.
+    if (body.type === 'url_verification') {
+      res.json({ challenge: body.challenge });
+      return;
+    }
+
+    // Reconhece o evento rapido, processa em background.
+    res.status(200).send('ok');
+
+    if (body.type !== 'event_callback' || !body.event) return;
+
+    const event = body.event;
+    const channel: string | undefined = event.channel;
+    if (!channel || channel !== SLACK_REPORTS_CONFIG.channelId) return;
+
+    // Mensagem em thread (reply): se for a primeira da janela, dispara
+    // o debouncer pra processar a thread inteira em 15s.
+    if (
+      event.type === 'message' &&
+      !event.bot_id &&
+      event.subtype !== 'bot_message' &&
+      event.thread_ts &&
+      event.thread_ts !== event.ts
+    ) {
+      debouncer.schedule(channel, event.thread_ts);
+      return;
+    }
+
+    // Reaction de resolucao na mensagem-pai.
+    if (
+      event.type === 'reaction_added' &&
+      event.reaction === SLACK_REPORTS_CONFIG.resolutionReaction &&
+      event.item?.type === 'message' &&
+      event.item.channel === SLACK_REPORTS_CONFIG.channelId
+    ) {
+      // event.item.ts e o ts da mensagem reagida. Se for mensagem-pai
+      // de thread, esse ts e o thread_ts.
+      void processResolution({
+        channel: event.item.channel,
+        threadTs: event.item.ts,
+      }).catch((err) =>
+        console.error('[slack-reports] processResolution falhou:', err)
+      );
+      return;
+    }
+  })
+);
+
+/**
+ * POST /api/v1/slack-reports/interactions
+ *
+ * Recebe payloads de Block Kit interactions (botoes "Sim, resolveu" /
+ * "Nao, ainda preciso"). Body vem como form-urlencoded com chave
+ * `payload` contendo JSON.
+ */
+router.post(
+  '/interactions',
+  rawParser,
+  verified('form', async (_req, res, payload) => {
+    res.status(200).send('ok');
+
+    if (payload.type !== 'block_actions') return;
+    const action = payload.actions?.[0];
+    if (!action) return;
+
+    let parsedValue: { channel?: string; threadTs?: string } = {};
+    try {
+      parsedValue = JSON.parse(action.value ?? '{}');
+    } catch {
+      // ignore
+    }
+
+    const messageChannel = payload.channel?.id;
+    const messageTs = payload.message?.ts;
+    if (!messageChannel || !messageTs) return;
+
+    if (action.action_id === 'slack_report_similar_yes') {
+      const ack = buildSimilarYesAcknowledged();
+      await updateMessage({ channel: messageChannel, ts: messageTs, ...ack });
+
+      // "Resolveu via report anterior" = a thread atual ja foi atendida
+      // pelos similares — entao tambem documenta a resolucao pra ela.
+      if (parsedValue.channel && parsedValue.threadTs) {
+        void processResolution({
+          channel: parsedValue.channel,
+          threadTs: parsedValue.threadTs,
+        }).catch((err) =>
+          console.error('[slack-reports] resolution-via-similar falhou:', err)
+        );
+      }
+    } else if (action.action_id === 'slack_report_similar_no') {
+      const ack = buildSimilarNoAcknowledged();
+      await updateMessage({ channel: messageChannel, ts: messageTs, ...ack });
+    }
+  })
+);
+
+export default router;

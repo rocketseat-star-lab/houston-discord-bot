@@ -12,8 +12,11 @@ const KEYWORD_WEIGHT = 0.3;
 
 export interface SimilarReport {
   id: bigint;
-  discordThreadId: string;
-  discordUserId: string;
+  discordThreadId: string | null;
+  discordUserId: string | null;
+  slackChannelId?: string | null;
+  slackThreadTs?: string | null;
+  slackUserId?: string | null;
   title: string;
   description: string;
   solution: string | null;
@@ -38,9 +41,28 @@ export async function createReportEmbedding(
   `;
 }
 
+export interface FindSimilarOpts {
+  /**
+   * Plataforma a filtrar. Reports do Discord ficaram historicamente no
+   * banco mas seus links (`discord.com/channels/...`) nao funcionam pra
+   * usuarios novos no Slack — entao reportes do Slack so devem matchar
+   * outros reportes do Slack, e vice-versa.
+   */
+  platform: "DISCORD" | "SLACK";
+  /**
+   * Identificador da thread em curso, pra nao retornar ela propria como
+   * "similar". Pro Discord e `discord_thread_id`; pro Slack a thread
+   * fica identificada pelo par `(slack_channel_id, slack_thread_ts)` —
+   * a query exclui o match exato desse par.
+   */
+  excludeDiscordThreadId?: string;
+  excludeSlackChannelId?: string;
+  excludeSlackThreadTs?: string;
+}
+
 export async function findSimilarReports(
   text: string,
-  excludeThreadId?: string
+  opts: FindSimilarOpts
 ): Promise<SimilarReport[]> {
   const embedding = await generateEmbedding(text);
   const embeddingString = `[${embedding.join(",")}]`;
@@ -52,10 +74,13 @@ export async function findSimilarReports(
   }
 
   const rawReports = await prisma.$queryRaw<RawReport[]>`
-    SELECT 
+    SELECT
       r.id,
       r.discord_thread_id as "discordThreadId",
       r.discord_user_id as "discordUserId",
+      r.slack_channel_id as "slackChannelId",
+      r.slack_thread_ts as "slackThreadTs",
+      r.slack_user_id as "slackUserId",
       r.title,
       r.description,
       r.solution,
@@ -70,9 +95,21 @@ export async function findSimilarReports(
       ) as similarity
     FROM houston_bot_reports r
     JOIN houston_bot_report_embeddings e ON e.report_id = r.id
-    WHERE 
-      r.discord_thread_id != ${excludeThreadId || ""}
+    WHERE
+      r.platform = ${opts.platform}
       AND r.solution IS NOT NULL
+      AND (
+        ${opts.excludeDiscordThreadId ?? null}::text IS NULL
+        OR r.discord_thread_id IS DISTINCT FROM ${opts.excludeDiscordThreadId ?? null}
+      )
+      AND (
+        ${opts.excludeSlackChannelId ?? null}::text IS NULL
+        OR ${opts.excludeSlackThreadTs ?? null}::text IS NULL
+        OR NOT (
+          r.slack_channel_id = ${opts.excludeSlackChannelId ?? null}
+          AND r.slack_thread_ts = ${opts.excludeSlackThreadTs ?? null}
+        )
+      )
     ORDER BY similarity DESC
     LIMIT ${MAX_SIMILAR_REPORTS}
   `;
