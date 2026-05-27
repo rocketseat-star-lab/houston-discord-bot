@@ -3,6 +3,41 @@ import type { SimilarReport } from '../../../services/reports/embeddingService';
 const MAX_SIMILARS_DISPLAYED = 3;
 
 /**
+ * Block de botao "Marcar como resolvido" — vai pro card de sugestao de
+ * similares (junto com Sim/Nao) e tambem pro card de "nenhum similar".
+ * Quando clicado, dispara `slack_report_mark_resolved` no handler de
+ * interactivity.
+ */
+function markResolvedButton(actionValue: string) {
+  return {
+    type: 'button',
+    action_id: 'slack_report_mark_resolved',
+    text: { type: 'plain_text', text: 'Marcar como resolvido', emoji: false },
+    style: 'primary',
+    value: actionValue,
+  };
+}
+
+/**
+ * Renderiza a data no formato pt-BR usando o token nativo de data do
+ * Slack — assim cada usuario ve no proprio fuso. Fallback explicito
+ * pra clientes sem renderizacao de tokens.
+ */
+function formatSlackDate(d: Date, fallback: string): string {
+  const unix = Math.floor(d.getTime() / 1000);
+  return `<!date^${unix}^{date_short_pretty} às {time}|${fallback}>`;
+}
+
+function formatFallback(d: Date): string {
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const min = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} às ${hh}:${min} UTC`;
+}
+
+/**
  * Monta os blocks (Slack Block Kit) pra mensagem de "Reports similares
  * encontrados" — header + lista de top 3 com links + botoes Sim/Nao.
  *
@@ -69,6 +104,7 @@ export function buildSimilarReportsMessage(opts: {
           style: 'danger',
           value: actionValue,
         },
+        markResolvedButton(actionValue),
       ],
     },
   ];
@@ -79,7 +115,7 @@ export function buildSimilarReportsMessage(opts: {
   };
 }
 
-export function buildNoSimilarReportsMessage(): { text: string; blocks: any[] } {
+export function buildNoSimilarReportsMessage(actionValue: string): { text: string; blocks: any[] } {
   return {
     text: 'Não encontrei reports similares — descreva seu problema com detalhes.',
     blocks: [
@@ -87,7 +123,63 @@ export function buildNoSimilarReportsMessage(): { text: string; blocks: any[] } 
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: '*Nenhum report similar encontrado.*\n\nContinue descrevendo seu relatório com detalhes pra que a equipe possa ajudar melhor. Quanto mais informações você fornecer, mais rápida será a resolução.\n\nQuando o problema for resolvido, reaja com :white_check_mark: na mensagem principal pra eu documentar.',
+          text: '*Nenhum report similar encontrado.*\n\nContinue descrevendo seu relatório com detalhes pra que a equipe possa ajudar melhor. Quanto mais informações você fornecer, mais rápida será a resolução.\n\nQuando o problema for resolvido, clica no botão abaixo pra eu documentar.',
+        },
+      },
+      {
+        type: 'actions',
+        elements: [markResolvedButton(actionValue)],
+      },
+    ],
+  };
+}
+
+/**
+ * Substitui o card original na thread depois que alguem clicou "Marcar
+ * como resolvido". Sem botoes — registra quem fechou e quando.
+ */
+export function buildResolvedCard(opts: {
+  resolvedByUserId: string;
+  resolvedAt: Date;
+}): { text: string; blocks: any[] } {
+  const dateStr = formatSlackDate(opts.resolvedAt, formatFallback(opts.resolvedAt));
+  return {
+    text: 'Marcado como resolvido.',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:white_check_mark: *Resolvido* em ${dateStr} por <@${opts.resolvedByUserId}>. Já documentei pra futuras buscas.`,
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * Mensagem postada no canal (fora da thread) anunciando a resolucao
+ * pra quem nao tava acompanhando. Linka pra thread via permalink.
+ */
+export function buildChannelResolvedNotification(opts: {
+  resolvedByUserId: string;
+  resolvedAt: Date;
+  threadPermalink: string | null;
+  reportTitle: string;
+}): { text: string; blocks: any[] } {
+  const dateStr = formatSlackDate(opts.resolvedAt, formatFallback(opts.resolvedAt));
+  const safeTitle = escapeText(opts.reportTitle);
+  const linkPart = opts.threadPermalink
+    ? `<${opts.threadPermalink}|${safeTitle}>`
+    : `*${safeTitle}*`;
+  return {
+    text: `Bug resolvido: ${opts.reportTitle}`,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:large_green_circle: *Bug resolvido* — ${linkPart}\n_Em ${dateStr} por <@${opts.resolvedByUserId}>._`,
         },
       },
     ],

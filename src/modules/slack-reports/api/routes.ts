@@ -7,6 +7,7 @@ import { updateMessage, resolveThreadTs } from '../services/slackClient';
 import {
   buildSimilarYesAcknowledged,
   buildSimilarNoAcknowledged,
+  buildResolvedCard,
 } from '../services/messageBuilder';
 
 // Singleton de debouncer pro modulo. Vive enquanto o pod estiver no ar —
@@ -153,6 +154,7 @@ router.post(
     ) {
       const reactedChannel = event.item.channel;
       const reactedTs = event.item.ts;
+      const reactedBy: string | undefined = event.user;
       void (async () => {
         const threadTs = await resolveThreadTs({
           channel: reactedChannel,
@@ -164,7 +166,11 @@ router.post(
           );
           return;
         }
-        await processResolution({ channel: reactedChannel, threadTs });
+        await processResolution({
+          channel: reactedChannel,
+          threadTs,
+          resolvedByUserId: reactedBy,
+        });
       })().catch((err) =>
         console.error('[slack-reports] processResolution falhou:', err)
       );
@@ -201,6 +207,8 @@ router.post(
     const messageTs = payload.message?.ts;
     if (!messageChannel || !messageTs) return;
 
+    const clickedByUserId: string | undefined = payload.user?.id;
+
     if (action.action_id === 'slack_report_similar_yes') {
       const ack = buildSimilarYesAcknowledged();
       await updateMessage({ channel: messageChannel, ts: messageTs, ...ack });
@@ -211,6 +219,7 @@ router.post(
         void processResolution({
           channel: parsedValue.channel,
           threadTs: parsedValue.threadTs,
+          resolvedByUserId: clickedByUserId,
         }).catch((err) =>
           console.error('[slack-reports] resolution-via-similar falhou:', err)
         );
@@ -218,6 +227,31 @@ router.post(
     } else if (action.action_id === 'slack_report_similar_no') {
       const ack = buildSimilarNoAcknowledged();
       await updateMessage({ channel: messageChannel, ts: messageTs, ...ack });
+    } else if (action.action_id === 'slack_report_mark_resolved') {
+      // Caminho principal de resolucao. Da feedback instantaneo editando
+      // o card pra "Resolvido em X por @user" antes do processamento
+      // pesado (GPT + embedding) terminar — usuario nao fica em loading.
+      if (!parsedValue.channel || !parsedValue.threadTs || !clickedByUserId) {
+        return;
+      }
+      const resolvedAt = new Date();
+      const resolvedCard = buildResolvedCard({
+        resolvedByUserId: clickedByUserId,
+        resolvedAt,
+      });
+      await updateMessage({
+        channel: messageChannel,
+        ts: messageTs,
+        ...resolvedCard,
+      });
+
+      void processResolution({
+        channel: parsedValue.channel,
+        threadTs: parsedValue.threadTs,
+        resolvedByUserId: clickedByUserId,
+      }).catch((err) =>
+        console.error('[slack-reports] mark-resolved falhou:', err)
+      );
     }
   })
 );

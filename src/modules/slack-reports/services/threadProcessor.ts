@@ -17,12 +17,14 @@ import { ReportCategory } from '@prisma/client';
 import {
   fetchSlackThread,
   postInThread,
+  postToChannel,
   getPermalink,
   addReaction,
 } from './slackClient';
 import {
   buildSimilarReportsMessage,
   buildNoSimilarReportsMessage,
+  buildChannelResolvedNotification,
 } from './messageBuilder';
 import { SLACK_REPORTS_CONFIG } from '../config';
 
@@ -69,9 +71,13 @@ export async function processNewSlackThread(opts: {
     excludeSlackThreadTs: threadTs,
   });
 
+  // `actionValue` serializa channel+threadTs no botao pra que o handler
+  // de interactivity nao precise persistir estado entre cliques.
+  const actionValue = JSON.stringify({ channel, threadTs });
+
   if (similar.length === 0) {
     console.log(`[slack-reports] No similar reports for ${channel}/${threadTs}`);
-    const msg = buildNoSimilarReportsMessage();
+    const msg = buildNoSimilarReportsMessage(actionValue);
     await postInThread({ channel, threadTs, ...msg });
     return;
   }
@@ -104,8 +110,20 @@ export async function processNewSlackThread(opts: {
 }
 
 /**
- * Roda quando alguem reage com :white_check_mark: na mensagem-pai.
- * Busca conteudo completo, analisa com GPT, persiste Report+embedding.
+ * Roda quando o usuario clica em "Marcar como resolvido" (ou, como
+ * fallback, reage com ✅ em qualquer mensagem da thread). Busca conteudo
+ * completo, analisa com GPT, persiste Report+embedding e dispara tres
+ * sinais visuais de resolucao:
+ *
+ *   1. Reage ✅ na mensagem-pai (origem da thread) — visivel no feed do
+ *      canal pra quem so passa olhando.
+ *   2. Posta uma mensagem no canal (fora da thread) anunciando a
+ *      resolucao com link permalink — quem nao tava na thread fica
+ *      sabendo que aquele assunto foi fechado.
+ *   3. (Caller do botao) edita o card original removendo botoes e
+ *      mostrando "Resolvido em DD/MM por @user" — feito em routes.ts
+ *      no momento do clique pra dar feedback instantaneo, antes deste
+ *      processResolution (que demora pelo GPT) acabar.
  *
  * Idempotente: se ja existe report pra esse channel+threadTs, faz
  * UPDATE da solucao ao inves de novo INSERT.
@@ -113,8 +131,9 @@ export async function processNewSlackThread(opts: {
 export async function processResolution(opts: {
   channel: string;
   threadTs: string;
+  resolvedByUserId?: string;
 }): Promise<void> {
-  const { channel, threadTs } = opts;
+  const { channel, threadTs, resolvedByUserId } = opts;
 
   const content = await fetchSlackThread(channel, threadTs);
   if (!content) {
@@ -166,21 +185,34 @@ export async function processResolution(opts: {
 
   await createReportEmbedding(report.id, embeddingText);
 
-  // Reage com checkmark na DESCRICAO (primeira reply nao-bot da thread)
-  // em vez da mensagem-pai. Motivo: o canal mostra so a mensagem-pai sem
-  // abrir a thread; ✅ visivel ali confundiria quem passa olhando o canal
-  // (parece que o bug foi resolvido na hora pelo proprio autor). Colocar
-  // dentro da thread mantem o sinal de "documentado" sem poluir o feed.
-  // Fallback pra mensagem-pai apenas se a thread tiver so o titulo (caso
-  // raro — quem reagiu sem ter descrito o problema).
-  const firstReplyTs = content.replies.find((m) => !m.isBot)?.ts;
+  // Sinal 1: ✅ na mensagem-pai. Como o disparo agora vem de um botao
+  // (clique explicito do usuario), o ✅ na pai eh sinal sem ambiguidade
+  // de que aquele assunto foi marcado como resolvido — fica visivel pra
+  // quem ta scrolling no canal sem abrir thread.
   await addReaction({
     channel,
-    timestamp: firstReplyTs ?? threadTs,
+    timestamp: threadTs,
     name: SLACK_REPORTS_CONFIG.resolutionReaction,
   });
 
+  // Sinal 2: post no canal (fora da thread) anunciando a resolucao.
+  // Permite o time todo saber que a thread foi fechada sem precisar
+  // re-abrir e ler. Linka pra thread via permalink pra dar contexto.
+  if (resolvedByUserId) {
+    const permalink = await getPermalink({
+      channel,
+      messageTs: threadTs,
+    });
+    const notification = buildChannelResolvedNotification({
+      resolvedByUserId,
+      resolvedAt: new Date(),
+      threadPermalink: permalink,
+      reportTitle: title,
+    });
+    await postToChannel({ channel, ...notification });
+  }
+
   console.log(
-    `[slack-reports] Resolution processed: report id=${report.id} category=${category}`
+    `[slack-reports] Resolution processed: report id=${report.id} category=${category} by=${resolvedByUserId ?? 'unknown'}`
   );
 }

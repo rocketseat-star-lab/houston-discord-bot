@@ -67,6 +67,25 @@ export async function postInThread(opts: {
   });
 }
 
+/**
+ * Posta no canal SEM thread_ts — usado pra avisar o time todo quando
+ * uma thread eh marcada como resolvida. Inclui link permalink pra
+ * thread no Block Kit pra quem quiser ir direto pro contexto.
+ */
+export async function postToChannel(opts: {
+  channel: string;
+  text: string;
+  blocks?: any[];
+}): Promise<void> {
+  await getClient().chat.postMessage({
+    channel: opts.channel,
+    text: opts.text,
+    blocks: opts.blocks,
+    unfurl_links: false,
+    unfurl_media: false,
+  });
+}
+
 export async function addReaction(opts: {
   channel: string;
   timestamp: string;
