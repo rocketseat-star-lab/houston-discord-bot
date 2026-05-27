@@ -123,7 +123,7 @@ export function buildNoSimilarReportsMessage(actionValue: string): { text: strin
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: '*Nenhum report similar encontrado.*\n\nContinue descrevendo seu relatório com detalhes pra que a equipe possa ajudar melhor. Quanto mais informações você fornecer, mais rápida será a resolução.\n\nQuando o problema for resolvido, clica no botão abaixo pra eu documentar.',
+          text: '*Nenhum report similar encontrado.*\n\nContinue descrevendo seu relatório com detalhes pra que a equipe possa ajudar melhor. Quanto mais informações você fornecer, mais rápida será a resolução.\n\nQuando o problema for resolvido, clique no botão abaixo para marcar como concluído.',
         },
       },
       {
@@ -150,7 +150,7 @@ export function buildResolvedCard(opts: {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `:white_check_mark: *Resolvido* em ${dateStr} por <@${opts.resolvedByUserId}>. Já documentei pra futuras buscas.`,
+          text: `:white_check_mark: *Resolvido* em ${dateStr} por <@${opts.resolvedByUserId}>.`,
         },
       },
     ],
