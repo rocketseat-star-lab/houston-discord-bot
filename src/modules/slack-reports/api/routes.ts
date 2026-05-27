@@ -1,4 +1,6 @@
 import express, { Router, Request, Response } from 'express';
+import { WebClient } from '@slack/web-api';
+import prisma from '../../../services/prisma';
 import { SLACK_REPORTS_CONFIG } from '../config';
 import { verifySlackSignature } from '../services/signatureVerifier';
 import { processNewSlackThread, processResolution } from '../services/threadProcessor';
@@ -255,5 +257,80 @@ router.post(
     }
   })
 );
+
+// TEMP(slack-reports-debug): endpoint pra inspecionar estado interno —
+// scopes ativos no token, contagem de reports do Slack no banco e o
+// estado de embeddings. Sem autenticacao porque nao expoe segredos
+// (so contagens e metadados). Remover depois de estabilizar.
+router.get('/_debug/state', async (_req: Request, res: Response) => {
+  const out: Record<string, any> = {};
+  out.channelId = SLACK_REPORTS_CONFIG.channelId;
+  out.signingSecretConfigured = !!SLACK_REPORTS_CONFIG.signingSecret;
+
+  // Scopes ativos no token: cabecalho `x-oauth-scopes` do Slack a cada
+  // chamada autenticada retorna isso. Chama `auth.test` e le os headers.
+  try {
+    const token = process.env.SLACK_BOT_TOKEN || '';
+    const sc = new WebClient(token, { rejectRateLimitedCalls: false });
+    const r: any = await sc.apiCall('auth.test', {});
+    out.auth = {
+      ok: r.ok,
+      bot_user: r.user,
+      bot_id: r.bot_id,
+      team: r.team,
+    };
+    // O WebClient versao atual nao expoe `response` raw direto.
+    // Vamos fazer um fetch manual pra ler o header.
+    const headerCheck = await fetch('https://slack.com/api/auth.test', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    out.scopes_granted =
+      headerCheck.headers.get('x-oauth-scopes') ?? '(header ausente)';
+  } catch (err: any) {
+    out.auth_error = err?.message ?? String(err);
+  }
+
+  // DB: contagem total + sample dos ultimos 5 reports do Slack, e se
+  // cada um tem embedding gerado.
+  try {
+    const total = await prisma.report.count({ where: { platform: 'SLACK' } });
+    const recent = await prisma.report.findMany({
+      where: { platform: 'SLACK' },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        slackChannelId: true,
+        slackThreadTs: true,
+        category: true,
+        solution: true,
+        resolvedAt: true,
+        createdAt: true,
+        embeddings: { select: { id: true } },
+      },
+    });
+    out.db = {
+      totalSlackReports: total,
+      recent: recent.map((r) => ({
+        id: r.id.toString(),
+        title: r.title,
+        slackChannelId: r.slackChannelId,
+        slackThreadTs: r.slackThreadTs,
+        category: r.category,
+        hasSolution: !!r.solution,
+        solutionLen: r.solution?.length ?? 0,
+        resolvedAt: r.resolvedAt,
+        createdAt: r.createdAt,
+        hasEmbedding: r.embeddings.length > 0,
+      })),
+    };
+  } catch (err: any) {
+    out.db_error = err?.message ?? String(err);
+  }
+
+  res.json(out);
+});
 
 export default router;
