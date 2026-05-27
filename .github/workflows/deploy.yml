@@ -92,7 +92,20 @@ jobs:
                   - name: migrate
                     image: ${IMAGE_URI}
                     imagePullPolicy: Always
-                    command: ["npx", "prisma", "migrate", "deploy"]
+                    # Tenta marcar como rolled-back quaisquer migrations que
+                    # tenham ficado em estado "failed" no `_prisma_migrations`
+                    # (deploy anterior abortado por erro de SQL). Sem isso o
+                    # Prisma recusa rodar novas migrations enquanto o estado
+                    # nao for resolvido manualmente. O `|| true` torna esses
+                    # comandos opcionais — em ambiente limpo nao tem o que
+                    # resolver e o passo so prossegue.
+                    command:
+                      - "sh"
+                      - "-c"
+                      - >-
+                        npx prisma migrate resolve --rolled-back
+                          20260526220000_add_slack_to_reports || true;
+                        npx prisma migrate deploy
                     envFrom:
                       - secretRef:
                           name: discord-bot-secrets
