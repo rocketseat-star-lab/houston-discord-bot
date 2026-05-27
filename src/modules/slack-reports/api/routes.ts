@@ -50,16 +50,29 @@ function verified(
 ) {
   return async (req: Request, res: Response) => {
     const raw = getRawBody(req);
-    const result = verifySlackSignature({
-      signingSecret: SLACK_REPORTS_CONFIG.signingSecret,
-      timestampHeader: req.header('x-slack-request-timestamp') ?? undefined,
-      signatureHeader: req.header('x-slack-signature') ?? undefined,
-      rawBody: raw,
-    });
-    if (!result.valid) {
-      console.warn('[slack-reports] Assinatura invalida:', result.reason);
-      res.status(401).send('invalid signature');
-      return;
+
+    // Modo testes: enquanto a env SLACK_SIGNING_SECRET nao for setada,
+    // aceitamos os webhooks SEM verificar assinatura. Logamos um warn
+    // bem visivel a cada chamada pra ninguem esquecer disso ligado em
+    // producao. Quando o secret for adicionado e o pod reiniciar, o
+    // codigo passa a verificar automaticamente.
+    if (!SLACK_REPORTS_CONFIG.signingSecret) {
+      console.warn(
+        '[slack-reports] ⚠️  SLACK_SIGNING_SECRET ausente — aceitando webhook SEM verificacao. ' +
+          'Configure o secret no K8s assim que possivel.'
+      );
+    } else {
+      const result = verifySlackSignature({
+        signingSecret: SLACK_REPORTS_CONFIG.signingSecret,
+        timestampHeader: req.header('x-slack-request-timestamp') ?? undefined,
+        signatureHeader: req.header('x-slack-signature') ?? undefined,
+        rawBody: raw,
+      });
+      if (!result.valid) {
+        console.warn('[slack-reports] Assinatura invalida:', result.reason);
+        res.status(401).send('invalid signature');
+        return;
+      }
     }
 
     let parsed: any;
