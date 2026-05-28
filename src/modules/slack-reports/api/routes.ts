@@ -233,7 +233,9 @@ router.post(
       // Caminho principal de resolucao. Da feedback instantaneo editando
       // o card pra "Resolvido em X por @user" antes do processamento
       // pesado (GPT + embedding) terminar — usuario nao fica em loading.
-      if (!parsedValue.channel || !parsedValue.threadTs || !clickedByUserId) {
+      const targetChannel = parsedValue.channel;
+      const targetThreadTs = parsedValue.threadTs;
+      if (!targetChannel || !targetThreadTs || !clickedByUserId) {
         return;
       }
       const resolvedAt = new Date();
@@ -254,16 +256,16 @@ router.post(
       void (async () => {
         try {
           await processResolution({
-            channel: parsedValue.channel,
-            threadTs: parsedValue.threadTs,
+            channel: targetChannel,
+            threadTs: targetThreadTs,
             resolvedByUserId: clickedByUserId,
           });
         } catch (err: any) {
           console.error('[slack-reports] mark-resolved falhou:', err);
           try {
             await postInThread({
-              channel: parsedValue.channel,
-              threadTs: parsedValue.threadTs,
+              channel: targetChannel,
+              threadTs: targetThreadTs,
               text: `:warning: Não consegui registrar essa thread no histórico. Erro: \`${(err?.message ?? String(err)).slice(0, 500)}\``,
             });
           } catch (postErr) {
