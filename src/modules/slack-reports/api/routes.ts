@@ -322,9 +322,9 @@ router.get('/_debug/state', async (_req: Request, res: Response) => {
       out.openai.testError = err?.message ?? String(err);
     }
 
-    // Teste do modelo de chat (gpt-4o) — esse e o caminho que estava
-    // estourando porque o codigo apontava pra gpt-4-turbo-preview, que
-    // foi deprecated. Hipotese a confirmar com essa probe.
+    // Teste do modelo de chat usado pela analise e sumarizacao (mesmo
+    // modelo de aiService.ts). Se falhar aqui, o processResolution
+    // estoura silenciosamente nesse passo.
     try {
       const r = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -333,7 +333,7 @@ router.get('/_debug/state', async (_req: Request, res: Response) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: 'gpt-4-turbo-preview',
           messages: [{ role: 'user', content: 'responda com "ok"' }],
           max_tokens: 5,
         }),
