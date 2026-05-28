@@ -5,6 +5,7 @@ import { buildSummary, summaryMessage, CsatSummary } from './summaryBuilder';
 import { formatFeedbackMessage } from './feedbackMessage';
 import { slackPublisher } from './slackPublisher';
 import { getCsatReviewsConfig } from './toolsConfigClient';
+import { normalizeMessageFields } from './messageFields';
 
 export interface DispatchResult {
   dryRun: boolean;
@@ -63,6 +64,7 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
   // dispara quando clicado, sem depender do toggle.
   const config = await getCsatReviewsConfig();
   const slackChannelId = config?.slackChannelId || '';
+  const messageFields = normalizeMessageFields(config?.messageFields);
 
   if (!dryRun && !slackChannelId) {
     return emptyResult(dryRun, 'Canal Slack não configurado nas configurações do Tools.');
@@ -125,7 +127,7 @@ export async function dispatchCsatReviews(opts: DispatchOptions = {}): Promise<D
 
   for (const f of commented) {
     try {
-      await slackPublisher.postReply(slackChannelId, parentTs, formatFeedbackMessage(f));
+      await slackPublisher.postReply(slackChannelId, parentTs, formatFeedbackMessage(f, messageFields));
     } catch (err) {
       console.error('[csat-reviews] failed to post reply:', err);
     }

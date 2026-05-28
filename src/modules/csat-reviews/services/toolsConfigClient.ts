@@ -8,10 +8,16 @@ function apiKey(): string | undefined {
   return process.env.INTERNAL_API_KEY;
 }
 
-export async function getCsatReviewsConfig(): Promise<{
+export interface CsatReviewsRemoteConfig {
   enabled: boolean;
   slackChannelId: string | null;
-} | null> {
+  // JSON cru — o consumidor passa por `normalizeMessageFields` antes
+  // de usar. Mantido como `unknown` aqui pra nao acoplar o cliente HTTP
+  // com a forma do MessageField.
+  messageFields: unknown;
+}
+
+export async function getCsatReviewsConfig(): Promise<CsatReviewsRemoteConfig | null> {
   const key = apiKey();
   if (!key) return null;
   try {
@@ -22,7 +28,7 @@ export async function getCsatReviewsConfig(): Promise<{
       console.error(`[csat-reviews] toolsConfigClient ${res.status}`);
       return null;
     }
-    return (await res.json()) as { enabled: boolean; slackChannelId: string | null };
+    return (await res.json()) as CsatReviewsRemoteConfig;
   } catch (err) {
     console.error('[csat-reviews] toolsConfigClient error:', err);
     return null;
