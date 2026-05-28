@@ -5,7 +5,7 @@ import { SLACK_REPORTS_CONFIG } from '../config';
 import { verifySlackSignature } from '../services/signatureVerifier';
 import { processNewSlackThread, processResolution } from '../services/threadProcessor';
 import { ThreadDebouncer } from '../services/threadDebouncer';
-import { updateMessage, resolveThreadTs } from '../services/slackClient';
+import { updateMessage, resolveThreadTs, postInThread } from '../services/slackClient';
 import {
   buildSimilarYesAcknowledged,
   buildSimilarNoAcknowledged,
@@ -247,13 +247,30 @@ router.post(
         ...resolvedCard,
       });
 
-      void processResolution({
-        channel: parsedValue.channel,
-        threadTs: parsedValue.threadTs,
-        resolvedByUserId: clickedByUserId,
-      }).catch((err) =>
-        console.error('[slack-reports] mark-resolved falhou:', err)
-      );
+      // Em paralelo: roda o pipeline pesado (GPT + embedding + persist).
+      // Se quebrar, posta o erro real numa reply da thread em vez de
+      // engolir silenciosamente — assim quem clicou ve por que deu errado
+      // sem precisar de log do pod.
+      void (async () => {
+        try {
+          await processResolution({
+            channel: parsedValue.channel,
+            threadTs: parsedValue.threadTs,
+            resolvedByUserId: clickedByUserId,
+          });
+        } catch (err: any) {
+          console.error('[slack-reports] mark-resolved falhou:', err);
+          try {
+            await postInThread({
+              channel: parsedValue.channel,
+              threadTs: parsedValue.threadTs,
+              text: `:warning: Não consegui registrar essa thread no histórico. Erro: \`${(err?.message ?? String(err)).slice(0, 500)}\``,
+            });
+          } catch (postErr) {
+            console.error('[slack-reports] não consegui postar erro:', postErr);
+          }
+        }
+      })();
     }
   })
 );
