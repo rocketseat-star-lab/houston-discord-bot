@@ -291,6 +291,38 @@ router.get('/_debug/state', async (_req: Request, res: Response) => {
     out.auth_error = err?.message ?? String(err);
   }
 
+  // OpenAI: env presente + teste leve de chamada (embedding minusculo)
+  // pra confirmar que a chave aceita uso. Sem isso, processResolution
+  // falha em silencio porque analyze+summarize+embedding usam OpenAI.
+  out.openai = {
+    apiKeyPresent: !!process.env.OPENAI_API_KEY,
+    apiKeyLength: (process.env.OPENAI_API_KEY ?? '').length,
+  };
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const r = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'text-embedding-3-large',
+          input: 'teste',
+        }),
+      });
+      out.openai.testStatus = r.status;
+      if (!r.ok) {
+        out.openai.testError = await r.text().then((t) => t.slice(0, 500));
+      } else {
+        const j: any = await r.json();
+        out.openai.testEmbeddingDim = j?.data?.[0]?.embedding?.length;
+      }
+    } catch (err: any) {
+      out.openai.testError = err?.message ?? String(err);
+    }
+  }
+
   // DB: contagem total + sample dos ultimos 5 reports do Slack, e se
   // cada um tem embedding gerado.
   try {
