@@ -73,6 +73,7 @@ async function dispatchBirthdays(
       fullName: b.full_name,
       avatarUrl: b.avatar_url,
       birthdayDate: new Date(b.birthday_date),
+      company: b.company,
     })
   );
 
@@ -132,6 +133,7 @@ async function dispatchAnniversaries(
         avatarUrl: b.avatar_url,
         admissionDate: new Date(b.admission_date!),
         today,
+        company: b.company,
       })
     );
 
