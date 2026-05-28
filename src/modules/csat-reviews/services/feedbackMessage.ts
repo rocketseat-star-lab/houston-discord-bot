@@ -1,12 +1,13 @@
 import { CsatFeedback } from './skylabClient';
 import { formatBRDateTime } from './dateLogic';
+import { isLike, ratingLabel } from './ratingLogic';
 
 /**
  * Formata um único feedback como mensagem do Slack (mrkdwn).
  *
  * Exemplo de saída:
  *
- *   *Nota:* 5/5
+ *   *Avaliação:* :+1: Curtiu
  *   *Data:* 19/05/2026 14:30
  *   *Aula:* React Hooks Avançado
  *   *Módulo:* Modulo XYZ
@@ -18,7 +19,7 @@ import { formatBRDateTime } from './dateLogic';
  */
 export function formatFeedbackMessage(feedback: CsatFeedback): string {
   const lines: string[] = [];
-  lines.push(`*Nota:* ${feedback.stars}/5`);
+  lines.push(`*Avaliação:* ${ratingLabel(isLike(feedback.stars))}`);
   lines.push(`*Data:* ${formatBRDateTime(feedback.createdAt)}`);
   lines.push(`*Aula:* ${feedback.lessonTitle}`);
   if (feedback.moduleTitle) lines.push(`*Módulo:* ${feedback.moduleTitle}`);

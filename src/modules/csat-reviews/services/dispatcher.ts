@@ -25,7 +25,7 @@ function emptyResult(dryRun: boolean, message?: string): DispatchResult {
   return {
     dryRun,
     dateCovered: null,
-    summary: { total: 0, withComment: 0, withoutComment: 0, averageStars: 0, byStars: {} },
+    summary: { total: 0, withComment: 0, withoutComment: 0, likes: 0, dislikes: 0, likeRate: 0 },
     feedbacks: [],
     message,
   };
