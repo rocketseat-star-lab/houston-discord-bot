@@ -36,7 +36,9 @@ Responda APENAS com um objeto JSON neste formato exato (com os textos em portugu
 }`;
 
   const { text } = await generateText({
-    model: openai("gpt-4-turbo-preview"),
+    // gpt-4-turbo-preview foi deprecated. gpt-4o e o substituto atual
+    // suportado em 2026 (boa relacao custo/qualidade, latencia menor).
+    model: openai("gpt-4o"),
     temperature: 0.3,
     prompt,
   });
@@ -73,7 +75,9 @@ ${threadMessages}
 Responda APENAS com o texto do resumo focando no PROBLEMA/ISSUE, não na solução. Resposta em português.`;
 
   const { text } = await generateText({
-    model: openai("gpt-4-turbo-preview"),
+    // gpt-4-turbo-preview foi deprecated. gpt-4o e o substituto atual
+    // suportado em 2026 (boa relacao custo/qualidade, latencia menor).
+    model: openai("gpt-4o"),
     temperature: 0.3,
     prompt,
   });

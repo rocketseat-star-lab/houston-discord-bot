@@ -43,17 +43,16 @@ export async function createReportEmbedding(
 
 export interface FindSimilarOpts {
   /**
-   * Plataforma a filtrar. Reports do Discord ficaram historicamente no
-   * banco mas seus links (`discord.com/channels/...`) nao funcionam pra
-   * usuarios novos no Slack — entao reportes do Slack so devem matchar
-   * outros reportes do Slack, e vice-versa.
-   */
-  platform: "DISCORD" | "SLACK";
-  /**
    * Identificador da thread em curso, pra nao retornar ela propria como
    * "similar". Pro Discord e `discord_thread_id`; pro Slack a thread
    * fica identificada pelo par `(slack_channel_id, slack_thread_ts)` —
-   * a query exclui o match exato desse par.
+   * a query exclui o match exato de qualquer um dos dois identificadores
+   * que tenha sido passado.
+   *
+   * A busca em si NAO filtra por plataforma — reports antigos do Discord
+   * tambem entram no resultado pra uso como base de conhecimento. Quando
+   * um match e de outra plataforma (ex.: Slack busca achou Discord), o
+   * caller monta o card sem link clicavel.
    */
   excludeDiscordThreadId?: string;
   excludeSlackChannelId?: string;
@@ -96,8 +95,7 @@ export async function findSimilarReports(
     FROM houston_bot_reports r
     JOIN houston_bot_report_embeddings e ON e.report_id = r.id
     WHERE
-      r.platform = ${opts.platform}
-      AND r.solution IS NOT NULL
+      r.solution IS NOT NULL
       AND (
         ${opts.excludeDiscordThreadId ?? null}::text IS NULL
         OR r.discord_thread_id IS DISTINCT FROM ${opts.excludeDiscordThreadId ?? null}

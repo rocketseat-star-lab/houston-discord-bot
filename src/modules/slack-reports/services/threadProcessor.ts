@@ -66,7 +66,6 @@ export async function processNewSlackThread(opts: {
   const combinedText = combineForEmbedding(title, description);
 
   const similar = await findSimilarReports(combinedText, {
-    platform: 'SLACK',
     excludeSlackChannelId: channel,
     excludeSlackThreadTs: threadTs,
   });

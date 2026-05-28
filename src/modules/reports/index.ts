@@ -26,7 +26,6 @@ async function onThreadCreate(thread: ThreadChannel): Promise<void> {
     const combinedText = combineForEmbedding(content.title, content.description);
 
     const similarReports = await findSimilarReports(combinedText, {
-      platform: 'DISCORD',
       excludeDiscordThreadId: thread.id,
     });
 
