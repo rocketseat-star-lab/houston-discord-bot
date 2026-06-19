@@ -4,6 +4,10 @@
  */
 
 import axios from 'axios';
+import prisma from './prisma';
+
+// Linha unica do snapshot local (ver model ModerationRuleSnapshot).
+const SNAPSHOT_ID = 'default';
 
 export interface CachedRule {
   id: string;
@@ -84,7 +88,17 @@ export class ModerationRuleCache {
           timeout: 30_000,
         });
 
-        const rules = response.data.rules || [];
+        // Blindagem: so aceitamos um array `rules` de verdade. Uma
+        // resposta 200 com shape inesperado (ex: Tools em cold-start
+        // devolvendo HTML, ou payload sem `rules`) NAO pode zerar o
+        // cache — tratamos como falha e mantemos as regras atuais. Um
+        // array vazio legitimo (todas as regras desativadas) e aceito.
+        const rules = response.data?.rules;
+        if (!Array.isArray(rules)) {
+          throw new Error(
+            "Resposta inesperada do sync-payload (campo 'rules' nao e um array)"
+          );
+        }
         await this.loadRules(rules);
 
         console.log(
@@ -117,12 +131,13 @@ export class ModerationRuleCache {
   }
 
   /**
-   * Carrega regras do backend e armazena em memória
+   * Preenche o Map em memória a partir de um array de regras. Filtra as
+   * desabilitadas e ordena por prioridade (maior primeiro) e nome.
+   * Nao persiste — quem decide persistir e o chamador.
    */
-  async loadRules(rules: CachedRule[]): Promise<void> {
+  private applyRules(rules: CachedRule[], syncedAt: Date): void {
     this.rules.clear();
 
-    // Ordena por prioridade (maior primeiro) e depois por nome
     const sortedRules = rules
       .filter((rule) => rule.enabled)
       .sort((a, b) => {
@@ -132,14 +147,71 @@ export class ModerationRuleCache {
         return a.name.localeCompare(b.name);
       });
 
-    // Armazena no Map
     for (const rule of sortedRules) {
       this.rules.set(rule.id, rule);
     }
 
-    this.lastSyncedAt = new Date();
+    this.lastSyncedAt = syncedAt;
+  }
 
+  /**
+   * Carrega regras vindas de um sync (push do Tools ou pull do bot):
+   * aplica em memória E persiste o snapshot local, pra sobreviver a
+   * restarts.
+   */
+  async loadRules(rules: CachedRule[]): Promise<void> {
+    this.applyRules(rules, new Date());
+    await this.saveSnapshot(rules);
     console.log(`[ModerationRuleCache] Loaded ${this.rules.size} active rules`);
+  }
+
+  /**
+   * Persiste o array CRU de regras (incluindo desabilitadas) no banco do
+   * bot. Best-effort: uma falha aqui nunca pode derrubar o sync — a
+   * moderacao segue funcionando em memória, so perde a rede de seguranca
+   * do snapshot ate o proximo sync.
+   */
+  private async saveSnapshot(rules: CachedRule[]): Promise<void> {
+    try {
+      await prisma.moderationRuleSnapshot.upsert({
+        where: { id: SNAPSHOT_ID },
+        update: { rules: rules as any, ruleCount: rules.length },
+        create: { id: SNAPSHOT_ID, rules: rules as any, ruleCount: rules.length },
+      });
+    } catch (err: any) {
+      console.error(
+        '[ModerationRuleCache] ⚠️ Falha ao persistir snapshot (moderacao segue ativa):',
+        err?.message ?? err
+      );
+    }
+  }
+
+  /**
+   * Carrega as regras do snapshot local (banco do bot). Usado no boot
+   * pra restaurar a moderacao IMEDIATAMENTE, sem depender de uma
+   * sincronizacao com o Tools — resolve o "deploy zera a moderacao".
+   * Retorna true se restaurou alguma regra.
+   */
+  async loadFromSnapshot(): Promise<boolean> {
+    try {
+      const snap = await prisma.moderationRuleSnapshot.findUnique({
+        where: { id: SNAPSHOT_ID },
+      });
+      const rules = snap?.rules;
+      if (!snap || !Array.isArray(rules) || rules.length === 0) return false;
+
+      this.applyRules(rules as unknown as CachedRule[], snap.updatedAt);
+      console.log(
+        `[ModerationRuleCache] Restauradas ${this.rules.size} regras do snapshot local (sync de ${snap.updatedAt.toISOString()})`
+      );
+      return this.rules.size > 0;
+    } catch (err: any) {
+      console.error(
+        '[ModerationRuleCache] Falha ao restaurar snapshot local:',
+        err?.message ?? err
+      );
+      return false;
+    }
   }
 
   /**

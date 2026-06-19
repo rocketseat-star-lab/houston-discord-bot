@@ -10,6 +10,22 @@ datasource db {
   extensions = [pgvector(map: "vector")]
 }
 
+// Snapshot local das regras de moderacao ativas. Existe pra que o bot
+// sobreviva a deploys/restarts sem depender de uma sincronizacao do
+// Tools: no boot ele carrega as regras daqui na hora (a RAM nasce vazia
+// a cada restart, e o filesystem do pod e efemero, entao o unico lugar
+// que persiste e o banco). Linha unica, id fixo `default`. Atualizado a
+// cada sync bem-sucedido (push do Tools ou pull do bot).
+model ModerationRuleSnapshot {
+  id        String   @id
+  rules     Json
+  ruleCount Int      @default(0) @map("rule_count")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("houston_bot_moderation_rule_snapshot")
+}
+
 model ModerationBan {
   id           BigInt    @id @default(autoincrement())
   guildId      String    @map("guild_id")

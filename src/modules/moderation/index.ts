@@ -172,16 +172,27 @@ export const moderationModule: FeatureModule = {
   },
   routes: moderationRoutes,
   async initialize() {
-    console.log('[moderation] Loading moderation rules from backend...');
-    // 10 retries com backoff exponencial (1s -> 30s) e timeout de 30s
-    // por chamada. Cobre cold start do Vercel sem desistir cedo. Veja
-    // `fetchAndLoadRules` em moderationRuleCache.ts.
-    await moderationRuleCache.fetchAndLoadRules(10);
-    console.log('[moderation] Moderation rules loading completed');
+    // 1. Restaura do snapshot local PRIMEIRO. A moderacao volta a
+    //    funcionar imediatamente apos um deploy/restart, sem depender de
+    //    sincronizacao com o Tools. Esse e o fix do "subo algo e a
+    //    moderacao para ate eu sincronizar de novo".
+    const restored = await moderationRuleCache.loadFromSnapshot();
+    console.log(
+      restored
+        ? '[moderation] Regras restauradas do snapshot local — moderacao ativa'
+        : '[moderation] Sem snapshot local; aguardando primeira sincronizacao'
+    );
 
-    // Background sync adaptativo: enquanto o cache estiver vazio,
-    // tenta a cada 30s (recuperacao agressiva pos-deploy); depois que
-    // popular, espaca pra 5min de steady state.
+    // 2. Atualiza do Tools em background, SEM bloquear o boot. Se o
+    //    snapshot ja restaurou, isto so traz mudancas feitas enquanto o
+    //    bot estava fora. Se nao havia snapshot, isto popula (com retries
+    //    pro cold start do Vercel). Falha aqui nao derruba a moderacao —
+    //    seguimos com o snapshot.
+    void moderationRuleCache.fetchAndLoadRules(restored ? 5 : 10);
+
+    // 3. Background sync adaptativo: enquanto o cache estiver vazio,
+    //    tenta a cada 30s (recuperacao agressiva); populado, espaca pra
+    //    5min de steady state.
     moderationRuleCache.startBackgroundSync(5 * 60 * 1000, 30 * 1000);
   },
 
